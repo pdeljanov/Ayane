@@ -3,41 +3,44 @@
 #include "channels.h"
 #include "formats.h"
 
-namespace Ayane
+namespace Stargazer
 {
-
-  class AudioBufferFormat
-  {
-    friend class AudioBuffer;
-
-    public:
-      AudioBufferFormat( );
-      AudioBufferFormat( Channels channels, SampleRate sampleRate );
-      AudioBufferFormat( const AudioBufferFormat &format );
-      
-      Channels channels() const;
-      unsigned int channelCount() const;
-
-      SampleRate sampleRate() const;
-      
-      bool isValid() const;
-      
-      AudioBufferFormat& operator= ( const AudioBufferFormat &right );
-      
-      bool operator== ( const AudioBufferFormat& right ) const;
-      bool operator!= ( const AudioBufferFormat& right ) const;
-      bool operator<  ( const AudioBufferFormat& right ) const;
-      bool operator<= ( const AudioBufferFormat& right ) const;
-      bool operator>  ( const AudioBufferFormat& right ) const;
-      bool operator>= ( const AudioBufferFormat& right ) const;
-      
-  private:
-    
-    Channels m_channels;
-    SampleRate m_sampleRate;
-    unsigned int m_samplesPerFrame;
-    
-  };
-  
-
+    namespace Audio
+    {
+        
+        class BufferFormat
+        {
+            friend class Buffer;
+            
+        public:
+            BufferFormat( );
+            BufferFormat( Channels channels, SampleRate sampleRate );
+            BufferFormat( const BufferFormat &format );
+            
+            Channels channels() const;
+            unsigned int channelCount() const;
+            
+            SampleRate sampleRate() const;
+            
+            bool isValid() const;
+            
+            BufferFormat& operator= ( const BufferFormat &right );
+            
+            bool operator== ( const BufferFormat& right ) const;
+            bool operator!= ( const BufferFormat& right ) const;
+            bool operator<  ( const BufferFormat& right ) const;
+            bool operator<= ( const BufferFormat& right ) const;
+            bool operator>  ( const BufferFormat& right ) const;
+            bool operator>= ( const BufferFormat& right ) const;
+            
+        private:
+            
+            Channels m_channels;
+            SampleRate m_sampleRate;
+            unsigned int m_samplesPerFrame;
+            
+        };
+        
+        
+    }
 }

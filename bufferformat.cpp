@@ -1,109 +1,106 @@
-#include "audiobufferformat.h"
+#include "bufferformat.h"
 
-namespace Ayane
+using namespace Stargazer::Audio;
+
+BufferFormat::BufferFormat() : m_channels ( 0 ), m_sampleRate ( 0 ), m_samplesPerFrame ( 0 )
 {
+    
+}
 
-  AudioBufferFormat::AudioBufferFormat() : m_channels ( 0 ), m_sampleRate ( 0 ), m_samplesPerFrame ( 0 )
-  {
-
-  }
-
-  AudioBufferFormat::AudioBufferFormat ( Channels channels, SampleRate sampleRate ) :
+BufferFormat::BufferFormat ( Channels channels, SampleRate sampleRate ) :
     m_channels ( channels ), m_sampleRate ( sampleRate ), m_samplesPerFrame ( 0 )
-  {
-
+{
+    
     // # of set bits in 0x00 to 0x0f
     const static int lookup[] = { 0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4 };
-
+    
     for ( ; channels != 0; channels >>= 4 )
-      m_samplesPerFrame += lookup[ channels & 0x0f ];
+        m_samplesPerFrame += lookup[ channels & 0x0f ];
+    
+}
 
-  }
-
-  AudioBufferFormat::AudioBufferFormat ( const Ayane::AudioBufferFormat& format ) :
+BufferFormat::BufferFormat ( const BufferFormat& format ) :
     m_channels ( format.m_channels ), m_sampleRate ( format.m_sampleRate ), m_samplesPerFrame ( format.m_samplesPerFrame )
-  {
+{
+    
+}
 
-  }
-
-  Channels AudioBufferFormat::channels() const
-  {
+Channels BufferFormat::channels() const
+{
     return m_channels;
-  }
+}
 
-  unsigned int AudioBufferFormat::channelCount() const
-  {
+unsigned int BufferFormat::channelCount() const
+{
     return m_samplesPerFrame;
-  }
+}
 
-  SampleRate AudioBufferFormat::sampleRate() const
-  {
+SampleRate BufferFormat::sampleRate() const
+{
     return m_sampleRate;
-  }
+}
 
-  bool AudioBufferFormat::isValid() const
-  {
+bool BufferFormat::isValid() const
+{
     return ( ( m_channels > 0 ) && ( m_sampleRate > 0 ) );
-  }
+}
 
-  AudioBufferFormat& AudioBufferFormat::operator= ( const Ayane::AudioBufferFormat& right )
-  {
+BufferFormat& BufferFormat::operator= ( const BufferFormat& right )
+{
     m_channels = right.m_channels;
     m_sampleRate = right.m_sampleRate;
     m_samplesPerFrame = right.m_samplesPerFrame;
     return *this;
-  }
+}
 
-  bool AudioBufferFormat::operator== ( const AudioBufferFormat& right ) const
-  {
+bool BufferFormat::operator== ( const BufferFormat& right ) const
+{
     return ( m_channels == right.m_channels ) && ( m_sampleRate == right.m_sampleRate );
-  }
+}
 
-  bool AudioBufferFormat::operator!= ( const AudioBufferFormat& right ) const
-  {
+bool BufferFormat::operator!= ( const BufferFormat& right ) const
+{
     return ( ( m_channels != right.m_channels ) || ( m_sampleRate != right.m_sampleRate ) );
-  }
+}
 
-  bool AudioBufferFormat::operator< ( const AudioBufferFormat& right ) const
-  {
+bool BufferFormat::operator< ( const BufferFormat& right ) const
+{
     if( m_sampleRate < right.m_sampleRate )
     {
-      return true;
+        return true;
     }
     else if( m_sampleRate == right.m_sampleRate )
     {
-      return ( m_samplesPerFrame < right.m_samplesPerFrame );
+        return ( m_samplesPerFrame < right.m_samplesPerFrame );
     }
     else
     {
-      return false;
+        return false;
     }
-  }
+}
 
-  bool AudioBufferFormat::operator<= ( const AudioBufferFormat& right ) const
-  {
+bool BufferFormat::operator<= ( const BufferFormat& right ) const
+{
     if( m_sampleRate < right.m_sampleRate )
     {
-      return true;
+        return true;
     }
     else if( m_sampleRate == right.m_sampleRate )
     {
-      return ( m_samplesPerFrame <= right.m_samplesPerFrame );
+        return ( m_samplesPerFrame <= right.m_samplesPerFrame );
     }
     else
     {
-      return false;
+        return false;
     }
-  }
+}
 
-  bool AudioBufferFormat::operator> ( const AudioBufferFormat& right ) const
-  {
+bool BufferFormat::operator> ( const BufferFormat& right ) const
+{
     return !( *this <= right );
-  }
+}
 
-  bool AudioBufferFormat::operator>= ( const AudioBufferFormat& right ) const
-  {
+bool BufferFormat::operator>= ( const BufferFormat& right ) const
+{
     return !( *this < right );
-  }
-
 }

@@ -9,47 +9,50 @@
  *
  */
 
-/** @file audiobufferlength.h
-  * \brief Represents an audio buffer length which may be specified in frames or time duration.
-**/
+/** @file bufferlength.h
+ * \brief Represents an audio buffer length which may be specified in frames or time duration.
+ **/
 
-namespace Ayane
+namespace Stargazer
 {
-
-  class AudioBufferLength
-  {
-    friend class AudioBuffer;
+    namespace Audio
+    {
+        
+        class BufferLength
+        {
+            friend class Buffer;
+            
+        public:
+            
+            enum TimeBase
+            {
+                Frames,
+                Duration
+            };
+            
+            BufferLength( );
+            BufferLength( double duration );
+            BufferLength( unsigned int frames );
+            BufferLength( const BufferLength& other );
+            
+            TimeBase timeBase() const;
+            
+            double duration( SampleRate rate = 0 ) const;
+            unsigned int frames( SampleRate rate = 0 ) const;
+            
+            bool isNil() const;
+            
+            BufferLength& operator= ( const BufferLength& other );
+            bool operator== ( const BufferLength& other ) const;
+            
+        private:
+            
+            TimeBase m_timeBase;
+            double m_duration;
+            unsigned int m_frames;
+            
+        };
+        
+    }
     
-    public:
-      
-      enum TimeBase
-      {
-	Frames,
-	Duration
-      };
-      
-      AudioBufferLength( );
-      AudioBufferLength( double duration );
-      AudioBufferLength( unsigned int frames );
-      AudioBufferLength ( const AudioBufferLength& other );
-      
-      TimeBase timeBase() const;
-      
-      double duration( SampleRate rate = 0 ) const;
-      unsigned int frames( SampleRate rate = 0 ) const;
-      
-      bool isNil() const;
-      
-      AudioBufferLength& operator= ( const AudioBufferLength& other );
-      bool operator== ( const AudioBufferLength& other ) const;
-      
-    private:
-    
-      TimeBase m_timeBase;
-      double m_duration;
-      unsigned int m_frames;
-
-  };
-
 }
-

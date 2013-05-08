@@ -1,28 +1,32 @@
 #pragma once
 
-#include "audiobufferformat.h"
+#include "bufferformat.h"
 
 #include <exception>
 
-namespace Ayane
+namespace Stargazer
 {
-
-  class FormatMismatchException : public std::exception
-  {
-
-    public:
-      FormatMismatchException( const AudioBufferFormat &expected, const AudioBufferFormat &received );
-
-      virtual const char* what() const throw();
-
-      AudioBufferFormat expected() const;
-      AudioBufferFormat received() const;
-      
-  private:
+    namespace Audio
+    {
+        
+        class FormatMismatchException : public std::exception
+        {
+            
+        public:
+            FormatMismatchException( const BufferFormat &expected, const BufferFormat &received );
+            
+            virtual const char* what() const throw();
+            
+            BufferFormat expected() const;
+            BufferFormat received() const;
+            
+        private:
+            
+            BufferFormat m_expected;
+            BufferFormat m_received;
+            
+        };
+        
+    }
     
-    AudioBufferFormat m_expected;
-    AudioBufferFormat m_received;
-
-  };
-
 }

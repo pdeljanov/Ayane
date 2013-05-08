@@ -3,10 +3,13 @@
 #
 
 
-# Add Boost and CppLog to the include directory search path.
+# Add CppLog to the include directory search path.
 
 include_directories( ${CPPLOG_INCLUDE_DIR} )
 
+# Add in the core library.
+
+include_directories( "../core/" )
 
 # Source files.
 
@@ -18,10 +21,8 @@ set( audio_SRCS
   duration.cpp
   formatmismatchexception.cpp
   formats.cpp
-  locklessqueue.cpp
-  locklessrecyclingqueue.cpp
   logger.cpp
-  rawaudiobuffer.cpp	)
+  rawbuffer.cpp	)
 
 
 # Header files (will be copied to system include directory).
@@ -34,17 +35,16 @@ set( audio_HDRS
   duration.h
   formatmismatchexception.h
   formats.h
-  locklessqueue.h
-  locklessrecyclingqueue.h
   logger.h
-  rawaudiobuffer.h	)
+  rawbuffer.h	)
 
 
 # Generate a library.
 
-add_library( stargazer_stdlib_audio SHARED 
+add_library( stargazer_stdlib_audio 
 		${audio_SRCS} ${audio_HDRS} )
 
+target_link_libraries( stargazer_stdlib_audio stargazer_stdlib_core )
 
 # Library installation information.
 
