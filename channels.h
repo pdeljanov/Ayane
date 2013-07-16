@@ -29,30 +29,30 @@ namespace Stargazer
          **/
         enum Channel
         {
-            FrontLeft           = 1<<1,  // FL
-            FrontRight          = 1<<2,  // FR
-            FrontCenter         = 1<<3,  // FC
-            LowFrequencyOne     = 1<<4,  // LFE1
-            BackLeft            = 1<<5,  // BL
-            BackRight           = 1<<6,  // BR
-            FrontLeftCenter     = 1<<7,  // FLc
-            FrontRightCenter	= 1<<8,  // FRc
-            BackCenter          = 1<<9,  // BC
-            LowFrequencyTwo     = 1<<10, // LFE2
-            SideLeft            = 1<<11, // SiL
-            SideRight           = 1<<12, // SiR
-            TopFrontLeft        = 1<<13, // TpFL
-            TopFrontRight       = 1<<14, // TpFR
-            TopFrontCenter      = 1<<15, // TpFC
-            TopCenter           = 1<<16, // TpC
-            TopBackLeft         = 1<<17, // TpBL
-            TopBackRight        = 1<<18, // TpBR
-            TopSideLeft         = 1<<19, // TpSiL
-            TopSideRight        = 1<<20, // TpSiR
-            TopBackCenter       = 1<<21, // TpBc
-            BottomFrontCenter	= 1<<22, // BtFC
-            BottomFrontLeft     = 1<<23, // BtFL
-            BottomFrontRight	= 1<<24  // BtFR
+            FrontLeft           = 1<<0,  // FL
+            FrontRight          = 1<<1,  // FR
+            FrontCenter         = 1<<2,  // FC
+            LowFrequencyOne     = 1<<3,  // LFE1
+            BackLeft            = 1<<4,  // BL
+            BackRight           = 1<<5,  // BR
+            FrontLeftCenter     = 1<<6,  // FLc
+            FrontRightCenter	= 1<<7,  // FRc
+            BackCenter          = 1<<8,  // BC
+            LowFrequencyTwo     = 1<<9, // LFE2
+            SideLeft            = 1<<10, // SiL
+            SideRight           = 1<<11, // SiR
+            TopFrontLeft        = 1<<12, // TpFL
+            TopFrontRight       = 1<<13, // TpFR
+            TopFrontCenter      = 1<<14, // TpFC
+            TopCenter           = 1<<15, // TpC
+            TopBackLeft         = 1<<16, // TpBL
+            TopBackRight        = 1<<17, // TpBR
+            TopSideLeft         = 1<<18, // TpSiL
+            TopSideRight        = 1<<19, // TpSiR
+            TopBackCenter       = 1<<20, // TpBc
+            BottomFrontCenter	= 1<<21, // BtFC
+            BottomFrontLeft     = 1<<22, // BtFL
+            BottomFrontRight	= 1<<23  // BtFR
         };
         
         
