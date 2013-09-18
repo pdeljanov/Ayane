@@ -66,13 +66,13 @@ set( audio_HDRS
 
 # Generate a library.
 
-add_library( stargazer_audio SHARED 
+add_library( stargazer_stdlib_audio SHARED 
 		${audio_SRCS} ${audio_HDRS} )
 
 
 # Library installation information.
 
-install( TARGETS stargazer_audio
+install( TARGETS stargazer_stdlib_audio
 		LIBRARY DESTINATION lib/stargazer
 		ARCHIVE DESTINATION lib/stargazer )
 
