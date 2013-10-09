@@ -1,83 +1,97 @@
-#
-# Stargazer Standard Audio Library (aka Ayane)
-#
+##### Stargazer Standard Libraries -- Audio #####
+
+include_directories( "../core/" )
+
+### Sources ###
 
 
-# Add Boost and CppLog to the include directory search path.
+# Sources used only in untrusted builds of audio.
+set( audio_untrusted_SRCS
+	)
+	
+# Headers used only in untrusted builds of audio.
+set( audio_untrusted_HDRS
+	)
 
-include_directories( ${CPPLOG_INCLUDE_DIR} )
+	
+# Sources used only in trusted builds of audio.
+set( audio_trusted_SRCS
+	)
+
+# Headers used only in trusted builds of audio.
+set( audio_trusted_HDRS
+	)
 
 
-# Source files.
-
+# Sources common to both trusted and untrusted builds of audio.
 set( audio_SRCS
-  atomicoperations.cpp
-  audiobuffer.cpp
-  audiobufferlength.cpp
-  asynchronousadaptor.cpp
-  abstractaudiosink.cpp
-  abstractaudiosource.cpp
-  abstractaudiodsp.cpp
-  abstractendpoint.cpp
-  channels.cpp
-  formats.cpp
-  formatmismatchexception.cpp
-  memoryoperations.cpp
-  audiobufferformat.cpp
-  duration.cpp
-  nosourceexception.cpp
-  invalidstateexception.cpp
-  locklessqueue.cpp
-  locklessrecyclingqueue.cpp
-  logger.cpp
-  result.cpp
-  rawaudiobuffer.cpp
-  sampleformatconverters.cpp
-  supportedaudiobufferformats.cpp	)
+	buffer.cpp
+	bufferformat.cpp
+	bufferlength.cpp
+	channels.cpp
+	duration.cpp
+	formatmismatchexception.cpp
+	formats.cpp
+	logger.cpp
+	rawbuffer.cpp
+  	)
 
-
-# Header files (will be copied to system include directory).
-
+# Headers common to both trusted and untrusted builds of audio.
 set( audio_HDRS
-  atomicoperations.h
-  audiobuffer.h
-  audiobufferlength.h
-  asynchronousadaptor.h
-  abstractaudiosink.h
-  abstractaudiosource.h
-  abstractaudiodsp.h
-  abstractendpoint.h
-  channels.h
-  formats.h
-  formatmismatchexception.h
-  memoryoperations.h
-  audiobufferformat.h
-  duration.h
-  nosourceexception.h
-  invalidstateexception.h
-  locklessqueue.h
-  locklessrecyclingqueue.h
-  logger.h
-  result.h
-  rawaudiobuffer.h
-  sampleformatconverters.h
-  supportedaudiobufferformats.h	)
+	buffer.h
+	bufferformat.h
+	bufferlength.h
+	channels.h
+	duration.h
+	formatmismatchexception.h
+	formats.h
+	logger.h
+	rawbuffer.h
+	)
 
 
-# Generate a library.
-
-add_library( stargazer_stdlib_audio SHARED 
-		${audio_SRCS} ${audio_HDRS} )
+### Targets ###
 
 
-# Library installation information.
+if( ${STARGAZER_ARCH} MATCHES "pexe" )
 
-install( TARGETS stargazer_stdlib_audio
-		LIBRARY DESTINATION lib/stargazer
-		ARCHIVE DESTINATION lib/stargazer )
+	add_library( stargazer_stdlib_audio-pexe STATIC
+			${audio_SRCS} 
+			${audio_untrusted_SRCS}
+			${audio_HDRS} 
+			${audio_untrusted_HDRS}
+			)
+		
+	target_link_libraries( stargazer_stdlib_audio-pexe 
+		stargazer_stdlib_core-pexe
+		)
+	
+	install( TARGETS stargazer_stdlib_audio-pexe
+			LIBRARY DESTINATION lib/stargazer
+			ARCHIVE DESTINATION lib/stargazer )
+			
+else()
+
+	add_library( stargazer_stdlib_audio SHARED
+			${audio_SRCS} 
+			${audio_trusted_SRCS}
+			${audio_HDRS} 
+			${audio_trusted_HDRS}
+			)
+		
+	target_link_libraries( stargazer_stdlib_audio 
+		stargazer_stdlib_core 
+		)
+
+	install( TARGETS stargazer_stdlib_audio
+			LIBRARY DESTINATION lib/stargazer
+			ARCHIVE DESTINATION lib/stargazer )
+	
+endif()
 
 
-# Header installation information.
+### Header Installation ###
 
-install( FILES ${audio_HDRS} 
-		DESTINATION include/stargazer/audio )
+
+install( FILES ${audio_HDRS}
+	DESTINATION "${libraries_HEADER_INSTALL_DIR}/core" )
