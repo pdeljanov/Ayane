@@ -11,9 +11,9 @@
  * \brief Encapsulates a buffer of audio data.
  **/
 
-#include <stddef.h>
+#include <cstddef>
 
-#include <dpointer.h>
+#include <core/dpointer.h>
 
 #include "bufferlength.h"
 #include "bufferformat.h"
@@ -109,7 +109,7 @@ namespace Stargazer
         private:
             
             BufferPrivate *d_ptr;
-            S_DECLARE_PRIVATE(Buffer);
+            STARGAZER_DECLARE_PRIVATE(Buffer)
             
         };
         

@@ -8,7 +8,7 @@
 #include "buffer.h"
 #include "formats.h"
 
-#include <alignedmemory.h>
+#include <core/alignedmemory.h>
 
 #include <cstring>
 
