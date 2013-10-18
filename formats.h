@@ -1,4 +1,5 @@
-#pragma once
+#ifndef STARGAZER_STDLIB_AUDIO_SAMPLEFORMATS_H_
+#define STARGAZER_STDLIB_AUDIO_SAMPLEFORMATS_H_
 
 /*  Ayane
  *
@@ -11,13 +12,20 @@
  * \brief Contains type definitions for audio sample format types.
  **/
 
+#include <core/attributes.h>
 #include <cstdint>
+#include <cmath>
 
-#define ConvDecl( itype, otype ) \
+#define DeclareConvertA( itype, otype, expr ) \
+static inline Sample##otype convertA##itype##To##otype( Sample##itype si ) \
+{ return expr; }
+
+#define DeclareConvertMany( itype, otype ) \
 inline static void convert##itype##To##otype ( Sample##itype *in, Sample##otype *out, unsigned int numSamples ) \
 { \
-converterTable[itype*NumberOfSampleFormats + otype]( reinterpret_cast<uint8_t*>(in), reinterpret_cast<uint8_t*>(out), numSamples ); \
+converterTable[itype*6 + otype]( reinterpret_cast<uint8_t*>(in), reinterpret_cast<uint8_t*>(out), numSamples ); \
 }
+
 
 #define ConvDeclPrivName( itype, otype ) \
 _convert##itype##To##otype
@@ -32,6 +40,59 @@ static void ConvDeclPrivName( itype, otype ) ( uint8_t *in, uint8_t *out, unsign
 // [ (itype * NumberOfSampleFormats) + otype ] =
 #define ConvPairNop( itype, otype ) \
 &_convertNop
+
+/*
+ Clamping functions from FFMPEG's libavcodec. Updated for C++11, and supplemented
+ with signed 24 bit integer clamping.
+ */
+
+static inline uint8_t clip_uint8( int in )
+{
+    if ( in & ( ~0xFF ) )
+        return ( -in ) >> 31;
+    else
+        return (uint8_t)in;
+}
+
+static inline int8_t clip_int8( int in )
+{
+    if ( ( in + 0x80 ) & ~0xFF )
+        return ( in >> 31 ) ^ 0x7F;
+    else
+        return (int8_t)in;
+}
+
+static inline uint16_t clip_uint16( int in )
+{
+    if ( in & ( ~0xFFFF ) )
+        return ( -in )>>31;
+    else
+        return (uint16_t)in;
+}
+
+static inline int16_t clip_int16( int in )
+{
+    if ( ( in + 0x8000 ) & ~0xFFFF )
+        return ( in >> 31 ) ^ 0x7FFF;
+    else
+        return (int16_t)in;
+}
+
+static inline int32_t clip_int24( int in )
+{
+    if ( ( in + 0x800000 ) & ~0xFFFFFF )
+        return ( in >> 31 ) ^ 0x7FFFFF;
+    else
+        return (int32_t)in;
+}
+
+static inline int32_t clip_int32( int64_t in )
+{
+    if ( ( in + 0x80000000u ) & ~0xFFFFFFFFul )
+        return ( in >> 63 ) ^ 0x7FFFFFFF;
+    else
+        return (int32_t)in;
+}
 
 namespace Stargazer
 {
@@ -58,10 +119,7 @@ namespace Stargazer
             Float32,
             
             /** 64bit floating point sample format. */
-            Float64,
-            
-            /** Used to determine the number of supported sample formats. */
-            NumberOfSampleFormats
+            Float64
             
         } SampleFormat;
         
@@ -111,45 +169,51 @@ namespace Stargazer
             /** Retreives information about the specified sample format. */
             static const Descriptor &about( SampleFormat format );
             
-            static void convert( const RawBuffer &in, RawBuffer &out, unsigned int numSamples );
+            /**
+             *  Converts a sample of InSampleType to OutSampleType.
+             */
+            template< typename InSampleType, typename OutSampleType >
+            static force_inline OutSampleType convertSample( InSampleType );
+            
+
             
             /* Public declarations for convert* functions */
             
-            ConvDecl( UInt8, Int16 )
-            ConvDecl( UInt8, Int24 )
-            ConvDecl( UInt8, Int32 )
-            ConvDecl( UInt8, Float32 )
-            ConvDecl( UInt8, Float64 )
+            DeclareConvertMany( UInt8, Int16 )
+            DeclareConvertMany( UInt8, Int24 )
+            DeclareConvertMany( UInt8, Int32 )
+            DeclareConvertMany( UInt8, Float32 )
+            DeclareConvertMany( UInt8, Float64 )
             
-            ConvDecl( Int16, UInt8 )
-            ConvDecl( Int16, Int24 )
-            ConvDecl( Int16, Int32 )
-            ConvDecl( Int16, Float32 )
-            ConvDecl( Int16, Float64 )
+            DeclareConvertMany( Int16, UInt8 )
+            DeclareConvertMany( Int16, Int24 )
+            DeclareConvertMany( Int16, Int32 )
+            DeclareConvertMany( Int16, Float32 )
+            DeclareConvertMany( Int16, Float64 )
             
-            ConvDecl( Int24, UInt8 )
-            ConvDecl( Int24, Int16 )
-            ConvDecl( Int24, Int32 )
-            ConvDecl( Int24, Float32 )
-            ConvDecl( Int24, Float64 )
+            DeclareConvertMany( Int24, UInt8 )
+            DeclareConvertMany( Int24, Int16 )
+            DeclareConvertMany( Int24, Int32 )
+            DeclareConvertMany( Int24, Float32 )
+            DeclareConvertMany( Int24, Float64 )
             
-            ConvDecl( Int32, UInt8 )
-            ConvDecl( Int32, Int16 )
-            ConvDecl( Int32, Int24 )
-            ConvDecl( Int32, Float32 )
-            ConvDecl( Int32, Float64 )
+            DeclareConvertMany( Int32, UInt8 )
+            DeclareConvertMany( Int32, Int16 )
+            DeclareConvertMany( Int32, Int24 )
+            DeclareConvertMany( Int32, Float32 )
+            DeclareConvertMany( Int32, Float64 )
             
-            ConvDecl( Float32, UInt8 )
-            ConvDecl( Float32, Int16 )
-            ConvDecl( Float32, Int24 )
-            ConvDecl( Float32, Int32 )
-            ConvDecl( Float32, Float64 )
+            DeclareConvertMany( Float32, UInt8 )
+            DeclareConvertMany( Float32, Int16 )
+            DeclareConvertMany( Float32, Int24 )
+            DeclareConvertMany( Float32, Int32 )
+            DeclareConvertMany( Float32, Float64 )
             
-            ConvDecl( Float64, UInt8 )
-            ConvDecl( Float64, Int16 )
-            ConvDecl( Float64, Int24 )
-            ConvDecl( Float64, Int32 )
-            ConvDecl( Float64, Float32 )
+            DeclareConvertMany( Float64, UInt8 )
+            DeclareConvertMany( Float64, Int16 )
+            DeclareConvertMany( Float64, Int24 )
+            DeclareConvertMany( Float64, Int32 )
+            DeclareConvertMany( Float64, Float32 )
             
             
         private:
@@ -250,14 +314,189 @@ namespace Stargazer
             };
             
         };
+
+        /* --- SampleFormats::convertSample(...) Specializations --- */
+        
+        /**
+         *  Converts a sample of InSampleType to OutSampleType.
+         */
+        
+        /* SampleUInt8 convertSample(...) specializations */
+      
+
+        template<>
+        force_inline SampleUInt8 SampleFormats::convertSample( SampleUInt8 si )
+        { return si; }
+        
+        template<>
+        force_inline SampleInt16 SampleFormats::convertSample( SampleUInt8 si )
+        { return (si - 0x80) << 8; }
+        
+        template<>
+        force_inline SampleInt32 SampleFormats::convertSample( SampleUInt8 si )
+        { return (si - 0x80) << 24; }
+        
+        template<>
+        force_inline SampleFloat32 SampleFormats::convertSample( SampleUInt8 si )
+        { return (si - 0x80) * (1.0f / (1<<7)); }
+        
+        template<>
+        force_inline SampleFloat64 SampleFormats::convertSample( SampleUInt8 si )
+        { return (si - 0x80) * (1.0 / (1<<7)); }
+
+        
+        /* SampleInt16 convertSample(...) specializations */
+        
+        template<>
+        force_inline SampleUInt8 SampleFormats::convertSample( SampleInt16 si )
+        { return (si >> 8) + 0x80; }
+        
+        template<>
+        force_inline SampleInt16 SampleFormats::convertSample( SampleInt16 si )
+        { return si; }
+
+        template<>
+        force_inline SampleInt32 SampleFormats::convertSample( SampleInt16 si )
+        { return (si) << 16; }
+        
+        template<>
+        force_inline SampleFloat32 SampleFormats::convertSample( SampleInt16 si )
+        { return (si) * (1.0f / (1<<15)); }
+        
+        template<>
+        force_inline SampleFloat64 SampleFormats::convertSample( SampleInt16 si )
+        { return (si) * (1.0 / (1<<15)); }
+        
+        /* SampleInt32 convertSample(...) specializations */
+
+        template<>
+        force_inline SampleUInt8 SampleFormats::convertSample( SampleInt32 si )
+        { return (si >> 24 ) + 0x80; }
+        
+        template<>
+        force_inline SampleInt16 SampleFormats::convertSample( SampleInt32 si )
+        { return (si) >> 16; }
+        
+        template<>
+        force_inline SampleInt32  SampleFormats::convertSample( SampleInt32 si )
+        { return si; }
+        
+        template<>
+        force_inline SampleFloat32 SampleFormats::convertSample( SampleInt32 si )
+        { return (si) * (1.0f / (1u<<31)); }
+        
+        template<>
+        force_inline SampleFloat64 SampleFormats::convertSample( SampleInt32 si )
+        { return (si) * (1.0 / (1u<<31)); }
+        
+        /* SampleFloat32 convertSample(...) specializations */
+
+        template<>
+        force_inline SampleUInt8 SampleFormats::convertSample( SampleFloat32 si )
+        { return clip_uint8( lrintf(si * (1<<7) ) + 0x80); }
+        
+        template<>
+        force_inline SampleInt16 SampleFormats::convertSample( SampleFloat32 si )
+        { return clip_int16( lrintf(si * (1<<15)) ); }
+        
+        template<>
+        force_inline SampleInt32 SampleFormats::convertSample( SampleFloat32 si )
+        { return clip_int32( llrintf(si * (1u<<31)) ); }
+        
+        template<>
+        force_inline SampleFloat32 SampleFormats::convertSample( SampleFloat32 si )
+        { return si; }
+        
+        template<>
+        force_inline SampleFloat64  SampleFormats::convertSample( SampleFloat32 si )
+        { return si; }
+        
+        /* SampleFloat64 convertSample(...) specializations */
+
+        template<>
+        force_inline SampleUInt8 SampleFormats::convertSample( SampleFloat64 si )
+        { return clip_uint8( lrint(si * (1<<7)) + 0x80 ); }
+
+        template<>
+        force_inline SampleInt16 SampleFormats::convertSample( SampleFloat64 si )
+        { return clip_int16( lrint(si * (1<<15)) ); }
+        
+        template<>
+        force_inline SampleInt32 SampleFormats::convertSample( SampleFloat64 si )
+        { return clip_int32( llrint(si * (1u<<31)) ); }
+        
+        template<>
+        force_inline SampleFloat32 SampleFormats::convertSample( SampleFloat64 si )
+        { return si; }
+        
+        template<>
+        force_inline SampleFloat64 SampleFormats::convertSample( SampleFloat64 si )
+        { return si; }
         
         
-        inline const SampleFormats::Descriptor &SampleFormats::about(SampleFormat format)
+        
+
+
+            
+        
+        force_inline const SampleFormats::Descriptor &SampleFormats::about(SampleFormat format)
         {
             return descriptorTable[format];
         }
 
         
         
+        
+        
     }
 }
+
+/* Insurance Policy
+ 
+ DeclareConvertA( UInt8, UInt8   , (si)                          )
+ DeclareConvertA( UInt8, Int16   , (si - 0x80) << 8              )
+ DeclareConvertA( UInt8, Int24   , (si - 0x80) << 16             )
+ DeclareConvertA( UInt8, Int32   , (si - 0x80) << 24             )
+ DeclareConvertA( UInt8, Float32 , (si - 0x80) * (1.0f / (1<<7)) )
+ DeclareConvertA( UInt8, Float64 , (si - 0x80) * (1.0 / (1<<7))  )
+ 
+ DeclareConvertA( Int16, UInt8   , (si >> 8) + 0x80        )
+ DeclareConvertA( Int16, Int16   , (si)                    )
+ DeclareConvertA( Int16, Int24   , (si) << 8               )
+ DeclareConvertA( Int16, Int32   , (si) << 16              )
+ DeclareConvertA( Int16, Float32 , (si) * (1.0f / (1<<15)) )
+ DeclareConvertA( Int16, Float64 , (si) * (1.0 / (1<<15))  )
+ 
+ DeclareConvertA( Int24, UInt8   , (si >> 16) + 0x80       )
+ DeclareConvertA( Int24, Int16   , (si) >> 8               )
+ DeclareConvertA( Int24, Int24   , (si)                    )
+ DeclareConvertA( Int24, Int32   , (si) << 8               )
+ DeclareConvertA( Int24, Float32 , (si) * (1.0f / (1<<23)) )
+ DeclareConvertA( Int24, Float64 , (si) * (1.0 / (1<<23))  )
+ 
+ DeclareConvertA( Int32, UInt8   , (si >> 24 ) + 0x80       )
+ DeclareConvertA( Int32, Int16   , (si) >> 16               )
+ DeclareConvertA( Int32, Int24   , (si) >> 8                )
+ DeclareConvertA( Int32, Int32   , (si)                     )
+ DeclareConvertA( Int32, Float32 , (si) * (1.0f / (1u<<31)) )
+ DeclareConvertA( Int32, Float64 , (si) * (1.0 / (1u<<31))  )
+ 
+ DeclareConvertA( Float32, UInt8  , clip_uint8(lrintf (si * (1<<7)  ) + 0x80) )
+ DeclareConvertA( Float32, Int16  , clip_int16(lrintf (si * (1<<15) )       ) )
+ DeclareConvertA( Float32, Int24  , clip_int24(lrintf (si * (1<<23) )       ) )
+ DeclareConvertA( Float32, Int32  , clip_int32(llrintf(si * (1u<<31))       ) )
+ DeclareConvertA( Float32, Float32, (si)                                      )
+ DeclareConvertA( Float32, Float64, (si)                                      )
+ 
+ DeclareConvertA( Float64, UInt8  , clip_uint8(lrint (si * (1<<7)  ) + 0x80) )
+ DeclareConvertA( Float64, Int16  , clip_int16(lrint (si * (1<<15) )       ) )
+ DeclareConvertA( Float64, Int24  , clip_int24(lrint (si * (1<<23) )       ) )
+ DeclareConvertA( Float64, Int32  , clip_int32(llrint(si * (1u<<31))       ) )
+ DeclareConvertA( Float64, Float32, (si)                                     )
+ DeclareConvertA( Float64, Float64, (si)                                     )
+ */
+
+
+
+
+#endif

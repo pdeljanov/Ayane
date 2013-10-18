@@ -1,4 +1,5 @@
-#pragma once
+#ifndef STARGAZER_STDLIB_AUDIO_CHANNELS_H_
+#define STARGAZER_STDLIB_AUDIO_CHANNELS_H_
 
 /*  Ayane
  *
@@ -36,9 +37,9 @@ namespace Stargazer
             BackLeft            = 1<<4,  // BL
             BackRight           = 1<<5,  // BR
             FrontLeftCenter     = 1<<6,  // FLc
-            FrontRightCenter	= 1<<7,  // FRc
+            FrontRightCenter    = 1<<7,  // FRc
             BackCenter          = 1<<8,  // BC
-            LowFrequencyTwo     = 1<<9, // LFE2
+            LowFrequencyTwo     = 1<<9,  // LFE2
             SideLeft            = 1<<10, // SiL
             SideRight           = 1<<11, // SiR
             TopFrontLeft        = 1<<12, // TpFL
@@ -52,7 +53,7 @@ namespace Stargazer
             TopBackCenter       = 1<<20, // TpBc
             BottomFrontCenter	= 1<<21, // BtFC
             BottomFrontLeft     = 1<<22, // BtFL
-            BottomFrontRight	= 1<<23  // BtFR
+            BottomFrontRight    = 1<<23  // BtFR
         };
         
         
@@ -92,3 +93,4 @@ namespace Stargazer
     
 }
 
+#endif

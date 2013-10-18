@@ -1,4 +1,5 @@
-#pragma once
+#ifndef STARGAZER_STDLIB_AUDIO_RAWBUFFER_H_
+#define STARGAZER_STDLIB_AUDIO_RAWBUFFER_H_
 
 #include <cstddef>
 
@@ -129,3 +130,5 @@ namespace Stargazer
         
     }
 }
+
+#endif

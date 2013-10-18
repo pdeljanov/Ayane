@@ -2,13 +2,18 @@
 
 using namespace Stargazer::Audio;
 
-BufferFormat::BufferFormat() : m_channels ( 0 ), m_sampleRate ( 0 ), m_samplesPerFrame ( 0 )
+BufferFormat::BufferFormat() :
+    m_channels ( 0 ),
+    m_sampleRate ( 0 ),
+    m_samplesPerFrame ( 0 )
 {
     
 }
 
 BufferFormat::BufferFormat ( Channels channels, SampleRate sampleRate ) :
-    m_channels ( channels ), m_sampleRate ( sampleRate ), m_samplesPerFrame ( 0 )
+    m_channels ( channels ),
+    m_sampleRate ( sampleRate ),
+    m_samplesPerFrame ( 0 )
 {
     
     // # of set bits in 0x00 to 0x0f
@@ -20,7 +25,9 @@ BufferFormat::BufferFormat ( Channels channels, SampleRate sampleRate ) :
 }
 
 BufferFormat::BufferFormat ( const BufferFormat& format ) :
-    m_channels ( format.m_channels ), m_sampleRate ( format.m_sampleRate ), m_samplesPerFrame ( format.m_samplesPerFrame )
+    m_channels ( format.m_channels ),
+    m_sampleRate ( format.m_sampleRate ),
+    m_samplesPerFrame ( format.m_samplesPerFrame )
 {
     
 }

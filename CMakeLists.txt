@@ -54,25 +54,37 @@ set( audio_trusted_HDRS
 
 # Sources common to both trusted and untrusted builds of audio.
 set( audio_SRCS
+	abstractclocksource.cpp
+	abstractstage.cpp
 	buffer.cpp
 	bufferformat.cpp
 	bufferlength.cpp
 	channels.cpp
 	duration.cpp
+	float32buffer.cpp
+	int16buffer.cpp
 	formatmismatchexception.cpp
 	formats.cpp
+	messagebus.cpp
+	pipeline.cpp
 	rawbuffer.cpp
   	)
 
 # Headers common to both trusted and untrusted builds of audio.
 set( audio_HDRS
+	abstractclocksource.h
+	abstractstage.h
 	buffer.h
 	bufferformat.h
 	bufferlength.h
 	channels.h
 	duration.h
+	float32buffer.h
+	int16buffer.h
 	formatmismatchexception.h
 	formats.h
+	messagebus.h
+	pipeline.h
 	rawbuffer.h
 	)
 
@@ -124,6 +136,11 @@ else()
 							stargazer_stdlib_audio-host 
                             stargazer_stdlib_core
 							)
+
+	add_executable( stargazer_stdlib_audio-benchmark benchmark.cpp )
+	target_link_libraries( stargazer_stdlib_audio-benchmark
+		stargazer_stdlib_audio
+		)
 
 	install( TARGETS stargazer_stdlib_audio
 			LIBRARY DESTINATION lib/stargazer

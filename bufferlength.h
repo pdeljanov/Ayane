@@ -1,4 +1,5 @@
-#pragma once
+#ifndef STARGAZER_STDLIB_AUDIO_BUFFERLENGTH_H_
+#define STARGAZER_STDLIB_AUDIO_BUFFERLENGTH_H_
 
 #include "formats.h"
 
@@ -56,3 +57,5 @@ namespace Stargazer
     }
     
 }
+
+#endif

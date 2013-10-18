@@ -1,4 +1,5 @@
-#pragma once
+#ifndef STARGAZER_STDLIB_AUDIO_FORMATMISMATCHEXCEPTION_H_
+#define STARGAZER_STDLIB_AUDIO_FORMATMISMATCHEXCEPTION_H_
 
 #include "bufferformat.h"
 
@@ -30,3 +31,5 @@ namespace Stargazer
     }
     
 }
+
+#endif

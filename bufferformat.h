@@ -1,4 +1,5 @@
-#pragma once
+#ifndef STARGAZER_STDLIB_AUDIO_BUFFERFORMAT_H_
+#define STARGAZER_STDLIB_AUDIO_BUFFERFORMAT_H_
 
 #include "channels.h"
 #include "formats.h"
@@ -44,3 +45,5 @@ namespace Stargazer
         
     }
 }
+
+#endif
