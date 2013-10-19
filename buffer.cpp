@@ -7,15 +7,13 @@
 
 #include "buffer.h"
 
-
-#include <cstring>
+#include <core/alignedmemory.h>
 
 using namespace Stargazer::Audio;
 
 Buffer::Buffer ( const BufferFormat &format, const BufferLength &length ) :
     m_format(format),
     m_length(length),
-    m_samples(0),
     m_timestamp(0)
 {
 
@@ -125,3 +123,59 @@ RawBuffer Buffer::samples() const
 }
 
 */
+
+
+
+
+template<typename T>
+TypedBuffer<T>::TypedBuffer( const BufferFormat &format, const BufferLength &length ) : Buffer( format, length )
+{
+    // Calculate the number of actual samples the buffer must store.
+    size_t samples = length.frames ( format.sampleRate() ) * format.channelCount();
+    
+    // Allocate the buffer with 16 byte alignment.
+    m_buffer = AlignedMemory::allocate16<T>(samples);
+    
+    // Setup the mapper.
+    m_mapper.reset(m_buffer, format, kInterleaved);
+}
+
+template<typename T>
+TypedBuffer<T>::~TypedBuffer()
+{
+    // Deallocate the buffer.
+    AlignedMemory::deallocate(m_buffer);
+    
+    // Call base class destructor.
+    Buffer::~Buffer();
+}
+
+// Mono
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< (const Mono<SampleInt16>&f ){ return write(f); }
+
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< (const Mono<SampleFloat32>&f ){ return write(f); }
+
+// Stereo20
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const Stereo20<SampleInt16>&f ){ return write(f); }
+
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const Stereo20<SampleFloat32>&f ){ return write(f); }
+
+
+namespace Stargazer {
+    namespace Audio
+    {
+
+        template class TypedBuffer<SampleInt16>;
+        template class TypedBuffer<SampleInt32>;
+        template class TypedBuffer<SampleFloat32>;
+        template class TypedBuffer<SampleFloat64>;
+        
+    }
+}
+
+
+

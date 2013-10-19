@@ -7,8 +7,7 @@
 //  Copyright (c) 2013 Philip Deljanov. All rights reserved.
 //
 
-#include "int16buffer.h"
-#include "float32buffer.h"
+#include "buffer.h"
 
 #include <vector>
 #include <iostream>
@@ -69,9 +68,10 @@ public:
 };
 
 
+
 int main(int argc, const char *argv[] )
 {
-    BufferFormat format( LayoutStereo, 48000 );
+    BufferFormat format( kStereo20, 48000 );
     BufferLength length( (unsigned int)NUMBER_OF_ELEMENTS );
 
     Stereo20<SampleFloat32> f;
@@ -79,6 +79,8 @@ int main(int argc, const char *argv[] )
     f.right = 0.5f;
     
     Stopwatch watch;
+    
+    
     
     int N = 20;
     double accumulator = 0.0f;
@@ -105,5 +107,6 @@ int main(int argc, const char *argv[] )
     double avg = accumulator / N;
     std::cout << "Average: " << 1000000*avg << std::endl;
     
+    return 0;
     
 }

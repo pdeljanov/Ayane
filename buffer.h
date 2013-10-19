@@ -16,11 +16,11 @@
 
 #include <core/macros.h>
 #include <core/attributes.h>
-#include <core/dpointer.h>
 
 #include "bufferlength.h"
 #include "bufferformat.h"
-#include "rawbuffer.h"
+#include "bufferframes.h"
+
 #include "duration.h"
 #include "formats.h"
 
@@ -28,124 +28,7 @@ namespace Stargazer
 {
     namespace Audio
     {
-        
-        typedef enum
-        {
-            kInterleaved = 0
-        }
-        BufferStorageScheme;
-        
-        
-        /**
-         *  Mapper maintains a set of pointers to each channel in a buffer.
-         *  Channel pointers are mapped arbitrarily and are incremented in the specified
-         *  scheme.
-         */
-        template< typename SampleType >
-        class Mapper
-        {
-        public:
-
-            // Actual samples
-            SampleType *left;
-            SampleType *right;
-            SampleType *lfe;
-            
-            Mapper() :
-                left(nullptr), right(nullptr), lfe(nullptr) {}
-            
-            
-            void reset( SampleType *base, const BufferFormat &format, BufferStorageScheme scheme )
-            {
-                if(scheme == kInterleaved)
-                {
-                    left = &base[0];
-                    right = &base[1];
-                    lfe = nullptr;
-                }
-            }
-            
-            force_inline Mapper& operator--()
-            {
-                --left;
-                --right;
-                --lfe;
-                return (*this);
-            }
-            
-            force_inline Mapper& operator++()
-            {
-                ++left;
-                ++right;
-                ++lfe;
-                return (*this);
-            }
-            
-
-        };
-        
-        /**
-         *  Mono represents a frame of audio with 1 (Centre) channel.
-         */
-        template< typename SampleType >
-        struct Mono
-        {
-        public:
-            SampleType centre;
-            
-            template<typename OutBufferSampleType>
-            force_inline void write( Mapper<OutBufferSampleType> &mapper ) const
-            {
-                *mapper.left = SampleFormats::convertSample<SampleType, OutBufferSampleType>(centre);
-            }
-            
-        };
-        
-        /**
-         *  Stereo20 represents a frame of audio with 2.0 (Left, Right) channels.
-         */
-        template< typename SampleType >
-        struct Stereo20
-        {
-        public:
-            SampleType left;
-            SampleType right;
-            
-            template<typename OutBufferSampleType>
-            force_inline void write( Mapper<OutBufferSampleType> &mapper ) const
-            {
-                // TODO: Check the mapper can do >=2 channels.
-                *mapper.left = SampleFormats::convertSample<SampleType, OutBufferSampleType>(left);
-                *mapper.right = SampleFormats::convertSample<SampleType, OutBufferSampleType>(right);
-            }
-            
-        };
-        
-        /**
-         *  Stereo21 represents a frame of audio with 2.1 (Left, Right, LFE) channels.
-         */
-        template< typename SampleType >
-        struct Stereo21
-        {
-        public:
-            SampleType *left;
-            SampleType *right;
-            SampleType *lfe;
-            
-            template<typename OutBufferSampleType>
-            force_inline void write( Mapper<OutBufferSampleType> &mapper ) const
-            {
-                // TODO: Check the mapper can do >=2.1 channels.
-                *mapper.left = SampleFormats::convertSample<SampleType, OutBufferSampleType>(left);
-                *mapper.right = SampleFormats::convertSample<SampleType, OutBufferSampleType>(right);
-                *mapper.lfe = SampleFormats::convertSample<SampleType, OutBufferSampleType>(lfe);
-            }
-        };
-        
-
-        
-        
-        
+    
         
         class Buffer
         {
@@ -203,11 +86,12 @@ namespace Stargazer
             /**
              *  Gets the sample format of the buffer.
              */
-            virtual SampleFormat sampleFormat() const = 0;
+            //virtual SampleFormat sampleFormat() const = 0;
             
             /* --- Shift Operator Overloads --- */
             
-            /* Each shift operator will need to be implemented in the actual concrete buffer
+            /* 
+             * Each shift operator will need to be implemented in the actual concrete buffer
              * classes. This is slightly messy, but is the best way (performance wise) to achieve 
              * the required level of indirection to allow the compiler to inline the conversion 
              * operations.
@@ -219,7 +103,10 @@ namespace Stargazer
              * a level of indirection, and so these overloads must be present in all concrete buffer types.
              *
              * Objectively, this is the *most* performant way to gain the features desired by a large
-             * margin. We'll accept the overhead to gain this performance.
+             * margin. Since we would need a table of conversion functions for all possible buffer, sample
+             * format and frame combinations (3d matrix), and we want to remain type safe, virtual functions
+             * are a reasonable choice. VTables will only be generated once, so memory overhead remains the same.
+             *
              */
             
             // Mono
@@ -236,17 +123,62 @@ namespace Stargazer
             
             BufferFormat m_format;
             BufferLength m_length;
-            
-            // The number of (format indepdenant) samples in the buffer.
-            size_t m_samples;
-  
+
             // Timestamp
             Duration m_timestamp;
             
         };
         
         
+        template<typename T>
+        class TypedBuffer : public Buffer
+        {
+        public:
+            
+            TypedBuffer( const BufferFormat &format, const BufferLength &length );
+            ~TypedBuffer();
+            
+            /** Gets the underlying sample format identifier for the buffer. */
+            //static SampleFormat identifier() { return Int16; }
+            
+            //virtual force_inline SampleFormat sampleFormat() const
+            //{ return Int16Buffer::identifier(); }
+            
+            // Mono
+            virtual TypedBuffer<T>& operator<< (const Mono<SampleInt16>& );
+            virtual TypedBuffer<T>& operator<< (const Mono<SampleFloat32>& );
+            
+            // Stereo20
+            virtual TypedBuffer<T>& operator<< ( const Stereo20<SampleInt16>& );
+            virtual TypedBuffer<T>& operator<< ( const Stereo20<SampleFloat32>& );
+            
+            /**
+             *  Writes a frame of audio data to the buffer. Any necessary conversions
+             *  are handled automatically. This is equivalent to using the left shift
+             *  operator.
+             *  @param frame The audio frame.
+             */
+            template<typename InFrameType>
+            force_inline TypedBuffer<T> &write( const InFrameType &frame )
+            {
+                m_mapper.write(frame);
+                return (*this);
+            }
+            
+        private:
+            T *m_buffer;
+            Mapper<T> m_mapper;
+        };
+        
+        extern template class TypedBuffer<SampleInt16>;
+        extern template class TypedBuffer<SampleInt32>;
+        extern template class TypedBuffer<SampleFloat32>;
+        extern template class TypedBuffer<SampleFloat64>;
 
+        typedef TypedBuffer<SampleInt16> Int16Buffer;
+        typedef TypedBuffer<SampleInt32> Int32Buffer;
+        typedef TypedBuffer<SampleFloat32> Float32Buffer;
+        typedef TypedBuffer<SampleFloat64> Float64Buffer;
         
     }
     

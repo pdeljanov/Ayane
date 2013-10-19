@@ -16,9 +16,6 @@
 #include <cstdint>
 #include <cmath>
 
-#define DeclareConvertA( itype, otype, expr ) \
-static inline Sample##otype convertA##itype##To##otype( Sample##itype si ) \
-{ return expr; }
 
 #define DeclareConvertMany( itype, otype ) \
 inline static void convert##itype##To##otype ( Sample##itype *in, Sample##otype *out, unsigned int numSamples ) \
@@ -317,13 +314,8 @@ namespace Stargazer
 
         /* --- SampleFormats::convertSample(...) Specializations --- */
         
-        /**
-         *  Converts a sample of InSampleType to OutSampleType.
-         */
-        
         /* SampleUInt8 convertSample(...) specializations */
       
-
         template<>
         force_inline SampleUInt8 SampleFormats::convertSample( SampleUInt8 si )
         { return si; }
@@ -344,7 +336,6 @@ namespace Stargazer
         force_inline SampleFloat64 SampleFormats::convertSample( SampleUInt8 si )
         { return (si - 0x80) * (1.0 / (1<<7)); }
 
-        
         /* SampleInt16 convertSample(...) specializations */
         
         template<>
@@ -450,52 +441,6 @@ namespace Stargazer
         
     }
 }
-
-/* Insurance Policy
- 
- DeclareConvertA( UInt8, UInt8   , (si)                          )
- DeclareConvertA( UInt8, Int16   , (si - 0x80) << 8              )
- DeclareConvertA( UInt8, Int24   , (si - 0x80) << 16             )
- DeclareConvertA( UInt8, Int32   , (si - 0x80) << 24             )
- DeclareConvertA( UInt8, Float32 , (si - 0x80) * (1.0f / (1<<7)) )
- DeclareConvertA( UInt8, Float64 , (si - 0x80) * (1.0 / (1<<7))  )
- 
- DeclareConvertA( Int16, UInt8   , (si >> 8) + 0x80        )
- DeclareConvertA( Int16, Int16   , (si)                    )
- DeclareConvertA( Int16, Int24   , (si) << 8               )
- DeclareConvertA( Int16, Int32   , (si) << 16              )
- DeclareConvertA( Int16, Float32 , (si) * (1.0f / (1<<15)) )
- DeclareConvertA( Int16, Float64 , (si) * (1.0 / (1<<15))  )
- 
- DeclareConvertA( Int24, UInt8   , (si >> 16) + 0x80       )
- DeclareConvertA( Int24, Int16   , (si) >> 8               )
- DeclareConvertA( Int24, Int24   , (si)                    )
- DeclareConvertA( Int24, Int32   , (si) << 8               )
- DeclareConvertA( Int24, Float32 , (si) * (1.0f / (1<<23)) )
- DeclareConvertA( Int24, Float64 , (si) * (1.0 / (1<<23))  )
- 
- DeclareConvertA( Int32, UInt8   , (si >> 24 ) + 0x80       )
- DeclareConvertA( Int32, Int16   , (si) >> 16               )
- DeclareConvertA( Int32, Int24   , (si) >> 8                )
- DeclareConvertA( Int32, Int32   , (si)                     )
- DeclareConvertA( Int32, Float32 , (si) * (1.0f / (1u<<31)) )
- DeclareConvertA( Int32, Float64 , (si) * (1.0 / (1u<<31))  )
- 
- DeclareConvertA( Float32, UInt8  , clip_uint8(lrintf (si * (1<<7)  ) + 0x80) )
- DeclareConvertA( Float32, Int16  , clip_int16(lrintf (si * (1<<15) )       ) )
- DeclareConvertA( Float32, Int24  , clip_int24(lrintf (si * (1<<23) )       ) )
- DeclareConvertA( Float32, Int32  , clip_int32(llrintf(si * (1u<<31))       ) )
- DeclareConvertA( Float32, Float32, (si)                                      )
- DeclareConvertA( Float32, Float64, (si)                                      )
- 
- DeclareConvertA( Float64, UInt8  , clip_uint8(lrint (si * (1<<7)  ) + 0x80) )
- DeclareConvertA( Float64, Int16  , clip_int16(lrint (si * (1<<15) )       ) )
- DeclareConvertA( Float64, Int24  , clip_int24(lrint (si * (1<<23) )       ) )
- DeclareConvertA( Float64, Int32  , clip_int32(llrint(si * (1u<<31))       ) )
- DeclareConvertA( Float64, Float32, (si)                                     )
- DeclareConvertA( Float64, Float64, (si)                                     )
- */
-
 
 
 
