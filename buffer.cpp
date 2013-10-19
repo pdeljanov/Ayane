@@ -159,10 +159,10 @@ TypedBuffer<T> &TypedBuffer<T>::operator<< (const Mono<SampleFloat32>&f ){ retur
 
 // Stereo20
 template<typename T>
-TypedBuffer<T> &TypedBuffer<T>::operator<< ( const Stereo20<SampleInt16>&f ){ return write(f); }
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const Stereo<SampleInt16>&f ){ return write(f); }
 
 template<typename T>
-TypedBuffer<T> &TypedBuffer<T>::operator<< ( const Stereo20<SampleFloat32>&f ){ return write(f); }
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const Stereo<SampleFloat32>&f ){ return write(f); }
 
 
 namespace Stargazer {

@@ -83,11 +83,6 @@ namespace Stargazer
             bool copy ( const Buffer &source );
             
             
-            /**
-             *  Gets the sample format of the buffer.
-             */
-            //virtual SampleFormat sampleFormat() const = 0;
-            
             /* --- Shift Operator Overloads --- */
             
             /* 
@@ -114,11 +109,11 @@ namespace Stargazer
             virtual Buffer& operator<< (const Mono<SampleFloat32>& ) = 0;
             
             // Stereo20
-            virtual Buffer& operator<< ( const Stereo20<SampleInt16>& ) = 0;
-            virtual Buffer& operator<< ( const Stereo20<SampleFloat32>& ) = 0;
+            virtual Buffer& operator<< ( const Stereo<SampleInt16>& ) = 0;
+            virtual Buffer& operator<< ( const Stereo<SampleFloat32>& ) = 0;
     
             // Stereo21
-            
+
         protected:
             
             BufferFormat m_format;
@@ -138,19 +133,13 @@ namespace Stargazer
             TypedBuffer( const BufferFormat &format, const BufferLength &length );
             ~TypedBuffer();
             
-            /** Gets the underlying sample format identifier for the buffer. */
-            //static SampleFormat identifier() { return Int16; }
-            
-            //virtual force_inline SampleFormat sampleFormat() const
-            //{ return Int16Buffer::identifier(); }
-            
             // Mono
             virtual TypedBuffer<T>& operator<< (const Mono<SampleInt16>& );
             virtual TypedBuffer<T>& operator<< (const Mono<SampleFloat32>& );
             
             // Stereo20
-            virtual TypedBuffer<T>& operator<< ( const Stereo20<SampleInt16>& );
-            virtual TypedBuffer<T>& operator<< ( const Stereo20<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator<< ( const Stereo<SampleInt16>& );
+            virtual TypedBuffer<T>& operator<< ( const Stereo<SampleFloat32>& );
             
             /**
              *  Writes a frame of audio data to the buffer. Any necessary conversions

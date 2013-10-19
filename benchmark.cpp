@@ -74,9 +74,10 @@ int main(int argc, const char *argv[] )
     BufferFormat format( kStereo20, 48000 );
     BufferLength length( (unsigned int)NUMBER_OF_ELEMENTS );
 
-    Stereo20<SampleFloat32> f;
-    f.left = 0.5f;
-    f.right = 0.5f;
+    Stereo<SampleFloat32> f;
+    f.FL = 0.5f;
+    f.FR = 0.5f;
+    
     
     Stopwatch watch;
     

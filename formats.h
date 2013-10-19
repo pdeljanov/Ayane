@@ -39,8 +39,8 @@ static void ConvDeclPrivName( itype, otype ) ( uint8_t *in, uint8_t *out, unsign
 &_convertNop
 
 /*
- Clamping functions from FFMPEG's libavcodec. Updated for C++11, and supplemented
- with signed 24 bit integer clamping.
+ *  Clamping functions from FFMPEG's libavcodec. Supplemented
+ *  with signed 24 bit integer clamping.
  */
 
 static inline uint8_t clip_uint8( int in )
@@ -138,6 +138,7 @@ namespace Stargazer
         
         /** Data type for a 64bit floating point sample. */
         typedef double   SampleFloat64;
+        
         
         /** Data type that should be used when representing a sample rate. */
         typedef unsigned int SampleRate;
@@ -399,7 +400,7 @@ namespace Stargazer
         { return si; }
         
         template<>
-        force_inline SampleFloat64  SampleFormats::convertSample( SampleFloat32 si )
+        force_inline SampleFloat64 SampleFormats::convertSample( SampleFloat32 si )
         { return si; }
         
         /* SampleFloat64 convertSample(...) specializations */
