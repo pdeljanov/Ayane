@@ -159,27 +159,6 @@ namespace Stargazer
         };
         
         
-        /** Enumeration of buffer storage schemes. */
-        typedef enum
-        {
-            /** Interleaved storage. Frames are stored consecutively in a
-             *  single buffer. Each frame contains 1 sample for each channel.
-             */
-            kInterleaved = 0,
-            
-            /** Planar storage. The samples for the first channel are stored first
-             *  for all the frames, then all the samples for the second channel, and
-             *  so on.
-             */
-            kPlanar = 1,
-            
-            /** Scatter/Gather (Vectored) storage. Similar to planar except each channel
-             *  has its own unique buffer in memory.
-             */
-            kScatterGather = 2
-        }
-        BufferStorageScheme;
-        
         
         template< typename SampleType >
         class SampleIterator
@@ -212,32 +191,22 @@ namespace Stargazer
         template< typename SampleType >
         class ChannelMapper
         {
-            private:
-                SampleType *m_base;
-                size_t m_map[11] = { 0 };
-                size_t m_stride;
-
             public:
+                SampleType* m_bufs[11] = { nullptr };
             
-                ChannelMapper() : m_base(nullptr){}
-
-                void reset(SampleType *base,
-                           const BufferFormat &format,
-                           BufferStorageScheme scheme );
+                void reset(SampleType *base, const BufferFormat &format, unsigned int frames);
                 
-                force_inline SampleType &fl()  { return m_base[m_map[0]];  }
-                force_inline SampleType &fr()  { return m_base[m_map[1]];  }
-                force_inline SampleType &fc()  { return m_base[m_map[2]];  }
-                force_inline SampleType &lfe() { return m_base[m_map[3]];  }
-                force_inline SampleType &bl()  { return m_base[m_map[4]];  }
-                force_inline SampleType &br()  { return m_base[m_map[5]];  }
-                force_inline SampleType &flc() { return m_base[m_map[6]];  }
-                force_inline SampleType &frc() { return m_base[m_map[7]];  }
-                force_inline SampleType &bc()  { return m_base[m_map[8]];  }
-                force_inline SampleType &sl()  { return m_base[m_map[9]];  }
-                force_inline SampleType &sr()  { return m_base[m_map[10]]; }
-                
-                force_inline void operator++ () { m_base += m_stride; }
+                force_inline SampleType *fl()  { return m_bufs[0];  }
+                force_inline SampleType *fr()  { return m_bufs[1];  }
+                force_inline SampleType *fc()  { return m_bufs[2];  }
+                force_inline SampleType *lfe() { return m_bufs[3];  }
+                force_inline SampleType *bl()  { return m_bufs[4];  }
+                force_inline SampleType *br()  { return m_bufs[5];  }
+                force_inline SampleType *flc() { return m_bufs[6];  }
+                force_inline SampleType *frc() { return m_bufs[7];  }
+                force_inline SampleType *bc()  { return m_bufs[8];  }
+                force_inline SampleType *sl()  { return m_bufs[9];  }
+                force_inline SampleType *sr()  { return m_bufs[10]; }
         };
         
         
@@ -246,6 +215,9 @@ namespace Stargazer
         template<typename T>
         class TypedBuffer : public Buffer
         {
+            // Befriend the other types of TypedBuffers.
+            template< typename S >
+            friend class TypedBuffer;
             
         public:
          
@@ -311,6 +283,7 @@ namespace Stargazer
             
         private:
             T *m_buffer;
+            size_t wr;
             ChannelMapper<T> chs;
             
             template<typename InSampleType>

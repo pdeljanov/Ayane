@@ -140,10 +140,14 @@ namespace Stargazer
                 
                 /** The actual number of bits contained in one sample. */
                 unsigned int numBits;
+                
             } Descriptor;
             
             /** Retreives information about the specified sample format. */
-            static const Descriptor &about( SampleFormat format );
+            static const Descriptor &about( SampleFormat format )
+            {
+                return descriptorTable[format];
+            }
             
             /**
              *  Converts a sample of InSampleType to OutSampleType.
@@ -155,10 +159,10 @@ namespace Stargazer
              *  Converts many samples of InSampleType to OutSampleType.
              */
             template< typename InSampleType, typename OutSampleType >
-            static void convertMany(SampleIterator<InSampleType>&,
-                                    SampleIterator<OutSampleType>& )
+            static void convertMany( InSampleType *src, OutSampleType *dest, int count )
             {
-                
+                for( int i = 0; i < count; ++i )
+                    dest[i] = SampleFormats::convertSample<InSampleType, OutSampleType>(src[i]);
             }
             
         private:
@@ -289,22 +293,8 @@ namespace Stargazer
         force_inline SampleFloat64 SampleFormats::convertSample( SampleFloat64 si )
         { return si; }
         
-        /* --- SampleFormats::convertMany(...) Specializations --- */
-
-        
 
 
-            
-        
-        force_inline const SampleFormats::Descriptor &SampleFormats::about(SampleFormat format)
-        {
-            return descriptorTable[format];
-        }
-
-        
-        
-        
-        
     }
 }
 

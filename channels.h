@@ -65,6 +65,15 @@ namespace Stargazer
             /*kFrontRightHeight    = 1<<14*/
         };
         
+        const Channels kChannelMask = 0x7FF;
+        
+        const Channel kCanonicalChannels[] =
+        {
+            kFrontLeft,  kFrontRight, kFrontCenter,       kLowFrequencyOne,
+            kBackLeft,   kBackRight,  kFrontLeftOfCenter, kFrontRightOfCenter,
+            kBackCenter, kSideLeft,   kSideRight
+        };
+        
         /** Enumeration of common channel layouts. **/
         enum ChannelLayout
         {
