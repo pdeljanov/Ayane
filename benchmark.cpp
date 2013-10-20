@@ -67,16 +67,31 @@ public:
     
 };
 
+float *podSrc;
+float *podDest;
 
+#define IGNORE_FIRST 2
+#define NUM_CHANNELS 2
 
 int main(int argc, const char *argv[] )
 {
     BufferFormat format( kStereo20, 48000 );
     BufferLength length( (unsigned int)NUMBER_OF_ELEMENTS );
+    
+    
+    
 
+    
     Stereo<SampleFloat32> f;
-    f.FL = 0.5f;
-    f.FR = 0.5f;
+    f.FL = -0.25f;
+    f.FR = 0.50f;
+    // FC
+    //f.BL = -2.0f;
+    //f.BR = 2.0f;
+    // FLc
+    // FRc
+    //f.SL = -1.0f;
+    //f.SR = 1.0f;
     
     
     Stopwatch watch;
@@ -88,24 +103,45 @@ int main(int argc, const char *argv[] )
     
     for( int n = 0; n < N; ++n )
     {
-        Buffer *b =  BufferFactory::make(Float32, format, length);
+        //Buffer *b =  BufferFactory::make(Float32, format, length);
+        Float32Buffer *b = new Float32Buffer(format, length);
+        podSrc = new float[NUM_CHANNELS*NUMBER_OF_ELEMENTS];
+        podDest = new float[NUM_CHANNELS*NUMBER_OF_ELEMENTS];
+        
+        watch.Restart();
+        memcpy(podDest, podSrc, sizeof(float)*NUM_CHANNELS*NUMBER_OF_ELEMENTS);
+        double resultMem = watch.Secs();
         
         watch.Restart();
         
-        for( int i = 0; i < NUMBER_OF_ELEMENTS; ++i )
+        watch.Restart();
+        for( size_t i = 0; i < (NUM_CHANNELS*NUMBER_OF_ELEMENTS); ++i)
+            podDest[i] = podSrc[i];
+        double resultFor = watch.Secs();
+        
+        watch.Restart();
+        
+        for( size_t i = 0; i < NUMBER_OF_ELEMENTS; ++i )
         {
             *b << f;
         }
         
+        
         double result = watch.Secs();
-        accumulator += result;
+        if( n >= IGNORE_FIRST )
+            accumulator += result;
 
         delete b;
+        delete podSrc;
+        delete podDest;
 
-        std::cout << "Run " << n << ": " << 1000000*result << std::endl;
+        std::cout << "Run (Ayane) " << n << ": " << 1000000*result << std::endl;
+        std::cout << "Run (memcpy) " << n << ": " << 1000000*resultMem << std::endl;
+        std::cout << "Run (for) " << n << ": " << 1000000*resultFor << std::endl;
+
     }
     
-    double avg = accumulator / N;
+    double avg = accumulator / (N - IGNORE_FIRST);
     std::cout << "Average: " << 1000000*avg << std::endl;
     
     return 0;

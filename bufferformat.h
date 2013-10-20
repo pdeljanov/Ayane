@@ -18,10 +18,14 @@ namespace Stargazer
             BufferFormat( Channels channels, SampleRate sampleRate );
             BufferFormat( const BufferFormat &format );
             
-            Channels channels() const;
-            unsigned int channelCount() const;
+            inline Channels channels() const
+            { return m_channels; }
             
-            SampleRate sampleRate() const;
+            inline unsigned int channelCount() const
+            { return m_samplesPerFrame; }
+            
+            inline SampleRate sampleRate() const
+            { return m_sampleRate; }
             
             bool isValid() const;
             

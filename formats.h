@@ -16,28 +16,6 @@
 #include <cstdint>
 #include <cmath>
 
-
-#define DeclareConvertMany( itype, otype ) \
-inline static void convert##itype##To##otype ( Sample##itype *in, Sample##otype *out, unsigned int numSamples ) \
-{ \
-converterTable[itype*6 + otype]( reinterpret_cast<uint8_t*>(in), reinterpret_cast<uint8_t*>(out), numSamples ); \
-}
-
-
-#define ConvDeclPrivName( itype, otype ) \
-_convert##itype##To##otype
-
-#define ConvDeclPriv( itype, otype ) \
-static void ConvDeclPrivName( itype, otype ) ( uint8_t *in, uint8_t *out, unsigned int numSamples )
-
-// [ (itype * NumberOfSampleFormats) + otype ] =
-#define ConvPair( itype, otype ) \
-&ConvDeclPrivName( itype, otype )
-
-// [ (itype * NumberOfSampleFormats) + otype ] =
-#define ConvPairNop( itype, otype ) \
-&_convertNop
-
 /*
  *  Clamping functions from FFMPEG's libavcodec. Supplemented
  *  with signed 24 bit integer clamping.
@@ -172,93 +150,19 @@ namespace Stargazer
              */
             template< typename InSampleType, typename OutSampleType >
             static force_inline OutSampleType convertSample( InSampleType );
-            
 
-            
-            /* Public declarations for convert* functions */
-            
-            DeclareConvertMany( UInt8, Int16 )
-            DeclareConvertMany( UInt8, Int24 )
-            DeclareConvertMany( UInt8, Int32 )
-            DeclareConvertMany( UInt8, Float32 )
-            DeclareConvertMany( UInt8, Float64 )
-            
-            DeclareConvertMany( Int16, UInt8 )
-            DeclareConvertMany( Int16, Int24 )
-            DeclareConvertMany( Int16, Int32 )
-            DeclareConvertMany( Int16, Float32 )
-            DeclareConvertMany( Int16, Float64 )
-            
-            DeclareConvertMany( Int24, UInt8 )
-            DeclareConvertMany( Int24, Int16 )
-            DeclareConvertMany( Int24, Int32 )
-            DeclareConvertMany( Int24, Float32 )
-            DeclareConvertMany( Int24, Float64 )
-            
-            DeclareConvertMany( Int32, UInt8 )
-            DeclareConvertMany( Int32, Int16 )
-            DeclareConvertMany( Int32, Int24 )
-            DeclareConvertMany( Int32, Float32 )
-            DeclareConvertMany( Int32, Float64 )
-            
-            DeclareConvertMany( Float32, UInt8 )
-            DeclareConvertMany( Float32, Int16 )
-            DeclareConvertMany( Float32, Int24 )
-            DeclareConvertMany( Float32, Int32 )
-            DeclareConvertMany( Float32, Float64 )
-            
-            DeclareConvertMany( Float64, UInt8 )
-            DeclareConvertMany( Float64, Int16 )
-            DeclareConvertMany( Float64, Int24 )
-            DeclareConvertMany( Float64, Int32 )
-            DeclareConvertMany( Float64, Float32 )
-            
+            /**
+             *  Converts many samples of InSampleType to OutSampleType.
+             */
+            template< typename InSampleType, typename OutSampleType >
+            static void convertMany(SampleIterator<InSampleType>&,
+                                    SampleIterator<OutSampleType>& )
+            {
+                
+            }
             
         private:
-            
-            typedef void ( *ConvertFunction ) ( uint8_t*, uint8_t*, unsigned int );
-            
-            // No-op convert function.
-            static void _convertNop( uint8_t*, uint8_t*, unsigned int ) { return; }
-            
-            /* Private convert functions. */
-            
-            ConvDeclPriv( UInt8, Int16 );
-            ConvDeclPriv( UInt8, Int24 );
-            ConvDeclPriv( UInt8, Int32 );
-            ConvDeclPriv( UInt8, Float32 );
-            ConvDeclPriv( UInt8, Float64 );
-            
-            ConvDeclPriv( Int16, UInt8 );
-            ConvDeclPriv( Int16, Int24 );
-            ConvDeclPriv( Int16, Int32 );
-            ConvDeclPriv( Int16, Float32 );
-            ConvDeclPriv( Int16, Float64 );
-            
-            ConvDeclPriv( Int24, UInt8 );
-            ConvDeclPriv( Int24, Int16 );
-            ConvDeclPriv( Int24, Int32 );
-            ConvDeclPriv( Int24, Float32 );
-            ConvDeclPriv( Int24, Float64 );
-            
-            ConvDeclPriv( Int32, UInt8 );
-            ConvDeclPriv( Int32, Int16 );
-            ConvDeclPriv( Int32, Int24 );
-            ConvDeclPriv( Int32, Float32 );
-            ConvDeclPriv( Int32, Float64 );
-            
-            ConvDeclPriv( Float32, UInt8 );
-            ConvDeclPriv( Float32, Int16 );
-            ConvDeclPriv( Float32, Int24 );
-            ConvDeclPriv( Float32, Int32 );
-            ConvDeclPriv( Float32, Float64 );
-            
-            ConvDeclPriv( Float64, UInt8 );
-            ConvDeclPriv( Float64, Int16 );
-            ConvDeclPriv( Float64, Int24 );
-            ConvDeclPriv( Float64, Int32 );
-            ConvDeclPriv( Float64, Float32 );
-   
+        
             // Format descriptor table.
             static constexpr Descriptor descriptorTable[] =
             {
@@ -270,46 +174,6 @@ namespace Stargazer
                 { "float64", sizeof(SampleFloat64), 8, 64 }
             };
             
-            // Convert function matrix.
-            static constexpr ConvertFunction converterTable[] =
-            {
-                ConvPairNop( UInt8, UInt8  ),
-                ConvPair( UInt8  , Int16   ),
-                ConvPair( UInt8  , Int24   ),
-                ConvPair( UInt8  , Int32   ),
-                ConvPair( UInt8  , Float32 ),
-                ConvPair( UInt8  , Float64 ),
-                ConvPair( Int16  , UInt8   ),
-                ConvPairNop( Int16, Int16  ),
-                ConvPair( Int16  , Int24   ),
-                ConvPair( Int16  , Int32   ),
-                ConvPair( Int16  , Float32 ),
-                ConvPair( Int16  , Float64 ),
-                ConvPair( Int24  , UInt8   ),
-                ConvPair( Int24  , Int16   ),
-                ConvPairNop( Int24, Int24  ),
-                ConvPair( Int24  , Int32   ),
-                ConvPair( Int24  , Float32 ),
-                ConvPair( Int24  , Float64 ),
-                ConvPair( Int32  , UInt8   ),
-                ConvPair( Int32  , Int16   ),
-                ConvPair( Int32  , Int24   ),
-                ConvPairNop( Int32, Int32  ),
-                ConvPair( Int32  , Float32 ),
-                ConvPair( Int32  , Float64 ),
-                ConvPair( Float32, UInt8   ),
-                ConvPair( Float32, Int16   ),
-                ConvPair( Float32, Int24   ),
-                ConvPair( Float32, Int32   ),
-                ConvPairNop( Float32, Float32 ),
-                ConvPair( Float32, Float64 ),
-                ConvPair( Float64, UInt8   ),
-                ConvPair( Float64, Int16   ),
-                ConvPair( Float64, Int24   ),
-                ConvPair( Float64, Int32   ),
-                ConvPair( Float64, Float32 ),
-                ConvPairNop( Float64, Float64 )
-            };
             
         };
 
@@ -425,7 +289,8 @@ namespace Stargazer
         force_inline SampleFloat64 SampleFormats::convertSample( SampleFloat64 si )
         { return si; }
         
-        
+        /* --- SampleFormats::convertMany(...) Specializations --- */
+
         
 
 

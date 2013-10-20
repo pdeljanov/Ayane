@@ -32,20 +32,6 @@ BufferFormat::BufferFormat ( const BufferFormat& format ) :
     
 }
 
-Channels BufferFormat::channels() const
-{
-    return m_channels;
-}
-
-unsigned int BufferFormat::channelCount() const
-{
-    return m_samplesPerFrame;
-}
-
-SampleRate BufferFormat::sampleRate() const
-{
-    return m_sampleRate;
-}
 
 bool BufferFormat::isValid() const
 {

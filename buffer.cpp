@@ -125,6 +125,30 @@ RawBuffer Buffer::samples() const
 */
 
 
+template< typename SampleType >
+void ChannelMapper<SampleType>::reset(SampleType *base,
+                                      const BufferFormat &format,
+                                      BufferStorageScheme scheme)
+{
+    if(scheme == kInterleaved)
+    {
+        m_map[0] = 0;
+        m_map[1] = 1;
+        m_map[2] = 2;
+        m_map[3] = 3;
+        m_map[4] = 4;
+        m_map[5] = 5;
+        m_map[6] = 6;
+        m_map[7] = 7;
+        m_map[8] = 8;
+        m_map[9] = 9;
+        m_map[10] = 10;
+    }
+
+    m_stride = format.channelCount();
+    m_base = base;
+}
+
 
 
 template<typename T>
@@ -137,7 +161,7 @@ TypedBuffer<T>::TypedBuffer( const BufferFormat &format, const BufferLength &len
     m_buffer = AlignedMemory::allocate16<T>(samples);
     
     // Setup the mapper.
-    m_mapper.reset(m_buffer, format, kInterleaved);
+    chs.reset(m_buffer, format, kInterleaved);
 }
 
 template<typename T>
@@ -150,19 +174,315 @@ TypedBuffer<T>::~TypedBuffer()
     Buffer::~Buffer();
 }
 
+/* Buffer traits to support template type -> enum mapping. */
+template< typename T >
+struct TypedBufferTraits
+{ static SampleFormat sampleFormat(); };
+
+template <>
+struct TypedBufferTraits<SampleInt16>
+{ static SampleFormat sampleFormat(){ return Int16; } };
+
+template <>
+struct TypedBufferTraits<SampleInt32>
+{ static SampleFormat sampleFormat(){ return Int32; } };
+
+template <>
+struct TypedBufferTraits<SampleFloat32>
+{ static SampleFormat sampleFormat(){ return Float32; } };
+
+template <>
+struct TypedBufferTraits<SampleFloat64>
+{ static SampleFormat sampleFormat(){ return Float64; } };
+
+template<typename T>
+SampleFormat TypedBuffer<T>::sampleFormat() const
+{ return TypedBufferTraits<T>::sampleFormat(); }
+
+
+/* Write(...) Functions */
+
+template< typename T >
+template< typename InSampleType >
+force_inline void TypedBuffer<T>::writeChannel(Channel ch, T &os, InSampleType is )
+{
+    if( m_format.channels() & ch )
+        os = SampleFormats::convertSample<InSampleType, T>(is);
+}
+
+
+template< typename T >
+template< typename InSampleType >
+force_inline void TypedBuffer<T>::write( const Mono<InSampleType> &i )
+{
+    chs.fl() = SampleFormats::convertSample<InSampleType, T>(i.FC);
+    ++chs;
+}
+
+template< typename T >
+template< typename InSampleType >
+force_inline void TypedBuffer<T>::write( const Stereo<InSampleType> &i )
+{
+    chs.fl() = SampleFormats::convertSample<InSampleType, T>(i.FL);
+    chs.fr() = SampleFormats::convertSample<InSampleType, T>(i.FR);
+    ++chs;
+}
+
+template< typename T >
+template< typename InSampleType >
+force_inline void TypedBuffer<T>::write( const Stereo21<InSampleType> &i )
+{
+    chs.fl() = SampleFormats::convertSample<InSampleType, T>(i.FL);
+    chs.fr() = SampleFormats::convertSample<InSampleType, T>(i.FR);
+    chs.lfe() = SampleFormats::convertSample<InSampleType, T>(i.LFE);
+    ++chs;
+}
+
+template< typename T >
+template< typename InSampleType >
+force_inline void TypedBuffer<T>::write( const MultiChannel3<InSampleType> &i )
+{
+    chs.fl() = SampleFormats::convertSample<InSampleType, T>(i.FL);
+    chs.fr() = SampleFormats::convertSample<InSampleType, T>(i.FR);
+    
+    writeChannel(kFrontCenter, chs.fc(), i.FC);
+    writeChannel(kBackCenter,  chs.bc(), i.BC);
+    
+    writeChannel(kLowFrequencyOne, chs.lfe(), i.LFE);
+    
+    ++chs;
+}
+
+template< typename T >
+template< typename InSampleType >
+force_inline void TypedBuffer<T>::write( const MultiChannel4<InSampleType> &i )
+{
+    chs.fl() = SampleFormats::convertSample<InSampleType, T>(i.FL);
+    chs.fr() = SampleFormats::convertSample<InSampleType, T>(i.FR);
+    
+    writeChannel(kFrontCenter, chs.fc(), i.FC);
+    writeChannel(kBackCenter,  chs.bc(), i.BC);
+    writeChannel(kBackLeft,    chs.bl(), i.BL);
+    writeChannel(kBackRight,   chs.br(), i.BR);
+    
+    writeChannel(kLowFrequencyOne, chs.lfe(), i.LFE);
+    
+    ++chs;
+}
+
+template< typename T >
+template< typename InSampleType >
+force_inline void TypedBuffer<T>::write( const MultiChannel5<InSampleType> &i )
+{
+    chs.fl() = SampleFormats::convertSample<InSampleType, T>(i.FL);
+    chs.fr() = SampleFormats::convertSample<InSampleType, T>(i.FR);
+    
+    writeChannel(kFrontCenter, chs.fc(), i.FC);
+    writeChannel(kBackLeft,    chs.bl(), i.BL);
+    writeChannel(kBackRight,   chs.br(), i.BR);
+    writeChannel(kSideLeft,    chs.sl(), i.SL);
+    writeChannel(kSideRight,   chs.sr(), i.SR);
+    
+    writeChannel(kLowFrequencyOne, chs.lfe(), i.LFE);
+    
+    ++chs;
+}
+
+template< typename T >
+template< typename InSampleType >
+force_inline void TypedBuffer<T>::write( const MultiChannel6<InSampleType> &i )
+{
+    chs.fl() = SampleFormats::convertSample<InSampleType, T>(i.FL);
+    chs.fr() = SampleFormats::convertSample<InSampleType, T>(i.FR);
+    
+    writeChannel(kFrontCenter, chs.fc(), i.FC);
+    writeChannel(kBackLeft,    chs.bl(), i.BL);
+    writeChannel(kBackRight,   chs.br(), i.BR);
+    writeChannel(kSideLeft,    chs.sl(), i.SL);
+    writeChannel(kSideRight,   chs.sr(), i.SR);
+    writeChannel(kBackCenter,  chs.bc(), i.BC);
+    
+    writeChannel(kLowFrequencyOne, chs.lfe(), i.LFE);
+    
+    ++chs;
+}
+
+template< typename T >
+template< typename InSampleType >
+void TypedBuffer<T>::write( const MultiChannel7<InSampleType> &i )
+{
+    chs.fl() = SampleFormats::convertSample<InSampleType, T>(i.FL);
+    chs.fr() = SampleFormats::convertSample<InSampleType, T>(i.FR);
+    
+    writeChannel(kFrontCenter,        chs.fc(),  i.FC);
+    writeChannel(kBackLeft,           chs.bl(),  i.BL);
+    writeChannel(kBackRight,          chs.br(),  i.BR);
+    writeChannel(kSideLeft,           chs.sl(),  i.SL);
+    writeChannel(kSideRight,          chs.sr(),  i.SR);
+    writeChannel(kFrontLeftOfCenter,  chs.flc(), i.FLc);
+    writeChannel(kFrontRightOfCenter, chs.frc(), i.FRc);
+    
+    writeChannel(kLowFrequencyOne, chs.lfe(), i.LFE);
+    
+    ++chs;
+}
+
+template< typename T >
+template< typename InSampleType >
+void TypedBuffer<T>::write(const TypedBuffer<InSampleType> &buffer)
+{
+    // Compatability check first. Buffers must be equal length in frames, and sample
+    // rate.
+    if((buffer.m_format.sampleRate() != m_format.sampleRate()) ||
+       (buffer.frames() != frames())
+       )
+    {
+        // TOOD: Raise an exception?
+        return;
+    }
+    
+    // Determine the channels that need to be copied (union of the channel layouts).
+    Channels channels = buffer.format().channels() & m_format.channels();
+    
+    //if( channels & kFrontLeft )
+    //    SampleFormats::convertMany<InSampleType, T>( srcIter, destIter );
+    
+}
+
+
+
+
+/* Write Shift-Operators */
+
+// A wild buffer appears!
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< (const Buffer& buffer )
+{
+    switch(buffer.sampleFormat())
+    {
+        case Int16:
+            write(static_cast<const Int16Buffer&>(buffer));
+            break;
+        case Int32:
+            write(static_cast<const Int32Buffer&>(buffer));
+            break;
+        case Float32:
+            write(static_cast<const Float32Buffer&>(buffer));
+            break;
+        case Float64:
+            write(static_cast<const Float64Buffer&>(buffer));
+            break;
+        default:
+            // This should never happen.
+            break;
+    };
+    return (*this);
+}
+
 // Mono
 template<typename T>
-TypedBuffer<T> &TypedBuffer<T>::operator<< (const Mono<SampleInt16>&f ){ return write(f); }
+TypedBuffer<T> &TypedBuffer<T>::operator<< (const Mono<SampleInt16>& f ){
+    write(f);
+    return (*this);
+}
 
 template<typename T>
-TypedBuffer<T> &TypedBuffer<T>::operator<< (const Mono<SampleFloat32>&f ){ return write(f); }
+TypedBuffer<T> &TypedBuffer<T>::operator<< (const Mono<SampleFloat32>&f ){
+    write(f);
+    return (*this);
+}
 
-// Stereo20
+// Stereo
 template<typename T>
-TypedBuffer<T> &TypedBuffer<T>::operator<< ( const Stereo<SampleInt16>&f ){ return write(f); }
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const Stereo<SampleInt16>&f ){
+    write(f);
+    return (*this);
+}
 
 template<typename T>
-TypedBuffer<T> &TypedBuffer<T>::operator<< ( const Stereo<SampleFloat32>&f ){ return write(f); }
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const Stereo<SampleFloat32>&f ){
+    write(f);
+    return (*this);
+}
+
+// Stereo21
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const Stereo21<SampleInt16>&f ){
+    write(f);
+    return (*this);
+}
+
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const Stereo21<SampleFloat32>&f ){
+    write(f);
+    return (*this);
+}
+
+// MultiChannel3
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const MultiChannel3<SampleInt16>&f ){
+    write(f);
+    return (*this);
+}
+
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const MultiChannel3<SampleFloat32>&f ){
+    write(f);
+    return (*this);
+}
+
+// MultiChannel4
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const MultiChannel4<SampleInt16>&f ){
+    write(f);
+    return (*this);
+}
+
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const MultiChannel4<SampleFloat32>&f ){
+    write(f);
+    return (*this);
+}
+
+// MultiChannel5
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const MultiChannel5<SampleInt16>&f ){
+    write(f);
+    return (*this);
+}
+
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const MultiChannel5<SampleFloat32>&f ){
+    write(f);
+    return (*this);
+}
+
+// MultiChannel6
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const MultiChannel6<SampleInt16>&f ){
+    write(f);
+    return (*this);
+}
+
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const MultiChannel6<SampleFloat32>&f ){
+    write(f);
+    return (*this);
+}
+
+// MultiChannel7
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const MultiChannel7<SampleInt16>&f ){
+    write(f);
+    return (*this);
+}
+
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<< ( const MultiChannel7<SampleFloat32>&f ){
+    write(f);
+    return (*this);
+}
+
 
 
 namespace Stargazer {
