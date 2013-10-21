@@ -8,6 +8,7 @@
 //
 
 #include "buffer.h"
+#include "refcountedpool.h"
 
 #include <vector>
 #include <iostream>
@@ -56,10 +57,12 @@ public:
         {
             case Int16:
                 return new Int16Buffer(format, length);
-                
+            case Int32:
+                return new Int32Buffer(format, length);
             case Float32:
                 return new Float32Buffer(format, length);
-                
+            case Float64:
+                return new Float64Buffer(format, length);
             default:
                 return nullptr;
         }
@@ -71,18 +74,14 @@ float *podSrc;
 float *podDest;
 
 #define IGNORE_FIRST 2
-#define NUM_CHANNELS 7
+#define NUM_CHANNELS 2
 
-int main(int argc, const char *argv[] )
+int benchmark()
 {
-    BufferFormat format( kSurround71, 48000 );
+    BufferFormat format( kStereo20, 48000 );
     BufferLength length( (unsigned int)NUMBER_OF_ELEMENTS );
     
-    
-    
-
-    
-    Surround70<SampleFloat32> f;
+    Stereo<SampleFloat32> f;
     f.FL = 1.00f;
     f.FR = 2.00f;
     // FC
@@ -135,7 +134,7 @@ int main(int argc, const char *argv[] )
         double result = watch.Secs();
         if( n >= IGNORE_FIRST )
             accumulator += result;
-
+        
         
         // BUFFER INSERT BENCHMARK
         watch.Restart();
@@ -147,7 +146,7 @@ int main(int argc, const char *argv[] )
         delete b2;
         delete podSrc;
         delete podDest;
-
+        
         std::cout << "Run (Ayane v2 Ind.) " << n << ": " << 1000000*result << std::endl;
         std::cout << "Run (Ayane v2 Buf.) " << n << ": " << 1000000*resultBuf << std::endl;
         std::cout << "Run (memcpy) " << n << ": " << 1000000*resultMem << std::endl;
@@ -159,5 +158,43 @@ int main(int argc, const char *argv[] )
     std::cout << "Average: " << 1000000*avg << std::endl;
     
     return 0;
+
+};
+
+class PoolAllocator
+{
+    
+public:
+    int *operator()() const 
+    {
+        static int i = 1;
+        int *out = new int;
+        *out = (i*=2);
+        std::cout << "[PoolAllocator] Allocated: " << *out << " @ " << out << std::endl;
+        return out;
+    };
+};
+
+int main(int argc, const char *argv[] )
+{
+    PoolAllocator p;
+    std::shared_ptr<RefCountedPool<int, PoolAllocator>> pool = RefCountedPool<int, PoolAllocator>::create(p);
+    
+    // Get int 1, give it back.
+    PooledRefCount<int> i0 = pool->acquire();
+    i0.reset();
+    
+    PooledRefCount<int> i1 = pool->acquire();
+    PooledRefCount<int> i2 = pool->acquire();
+    
+    i1.reset();
+    
+    pool.reset();
+    
+    i2.reset();
     
 }
+
+
+
+

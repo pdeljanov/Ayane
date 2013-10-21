@@ -147,6 +147,7 @@ namespace Stargazer
             
             virtual Buffer &operator<< ( const Buffer& ) = 0;
             
+            //virtual Buffer &operator* ( const Buffer& ) = 0;
             
         protected:
             
@@ -157,67 +158,14 @@ namespace Stargazer
             Duration m_timestamp;
             
         };
-        
-        
-        
-        template< typename SampleType >
-        class SampleIterator
-        {
-        public:
-            
-            force_inline SampleType* operator*()
-            { return m_pointer; }
-            
-            force_inline SampleIterator& operator++()
-            {
-                m_pointer += m_stride;
-                return (*this);
-            }
-            
-            force_inline SampleIterator& operator--()
-            {
-                m_pointer -= m_stride;
-                return (*this);
-            }
-            
-        private:
-            STARGAZER_DISALLOW_DEFAULT_CTOR(SampleIterator)
-            
-            SampleType *m_pointer;
-            size_t m_stride;
-        };
-        
-        
-        template< typename SampleType >
-        class ChannelMapper
-        {
-            public:
-                SampleType* m_bufs[11] = { nullptr };
-            
-                void reset(SampleType *base, const BufferFormat &format, unsigned int frames);
-                
-                force_inline SampleType *fl()  { return m_bufs[0];  }
-                force_inline SampleType *fr()  { return m_bufs[1];  }
-                force_inline SampleType *fc()  { return m_bufs[2];  }
-                force_inline SampleType *lfe() { return m_bufs[3];  }
-                force_inline SampleType *bl()  { return m_bufs[4];  }
-                force_inline SampleType *br()  { return m_bufs[5];  }
-                force_inline SampleType *flc() { return m_bufs[6];  }
-                force_inline SampleType *frc() { return m_bufs[7];  }
-                force_inline SampleType *bc()  { return m_bufs[8];  }
-                force_inline SampleType *sl()  { return m_bufs[9];  }
-                force_inline SampleType *sr()  { return m_bufs[10]; }
-        };
-        
-        
+
         
         
         template<typename T>
         class TypedBuffer : public Buffer
         {
             // Befriend the other types of TypedBuffers.
-            template< typename S >
-            friend class TypedBuffer;
+            template< typename S > friend class TypedBuffer;
             
         public:
          
@@ -282,15 +230,23 @@ namespace Stargazer
 
             
         private:
-            T *m_buffer;
-            size_t wr;
-            ChannelMapper<T> chs;
+            
+            typedef T* ChannelMap[11];
+            
+            size_t m_wr;
+            size_t m_rd;
+            ChannelMap m_ch = { nullptr };
+            
+            /**
+             *  Builds the channel map for the requested channels using the specified
+             *  buffer.
+             */
+            void buildChannelMap( ChannelMap map, Channels channels, T* base, unsigned int stride );
+            
             
             template<typename InSampleType>
             void writeChannel( Channel ch, T &output, InSampleType is );
-            
-            template<typename InSampleType>
-            void writeChannel( Channel ch, T *output, InSampleType *input );
+
             
         };
         

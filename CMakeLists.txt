@@ -60,6 +60,7 @@ set( audio_SRCS
 	bufferframes.cpp
 	bufferformat.cpp
 	bufferlength.cpp
+	refcountedpool.cpp
 	channels.cpp
 	duration.cpp
 	formatmismatchexception.cpp
@@ -77,6 +78,7 @@ set( audio_HDRS
 	bufferframes.h
 	bufferformat.h
 	bufferlength.h
+	refcountedpool.h
 	channels.h
 	duration.h
 	formatmismatchexception.h
