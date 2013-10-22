@@ -9,6 +9,7 @@
 
 #include "buffer.h"
 #include "refcountedpool.h"
+#include "abstractstage.h"
 
 #include <vector>
 #include <iostream>
@@ -175,15 +176,47 @@ public:
     };
 };
 
-int main(int argc, const char *argv[] )
+
+class TestSource : public AbstractStage
 {
-    PoolAllocator p;
-    std::shared_ptr<RefCountedPool<int, PoolAllocator>> pool = RefCountedPool<int, PoolAllocator>::create(p);
+public:
     
+    TestSource() : AbstractStage()
+    {
+        m_sources.push_back(std::make_shared<SourcePort>(*this));
+
+    }
+    
+    std::shared_ptr<SourcePort> &output()
+    {
+        return m_sources[0];
+    }
+};
+
+class TestSink : public AbstractStage
+{
+public:
+    
+    TestSink() : AbstractStage()
+    {
+        m_sinks.push_back(std::make_shared<SinkPort>(*this));
+    }
+    
+    
+    std::shared_ptr<SinkPort> &input()
+    {
+        return m_sinks[0];
+    }
+};
+
+
+int main(int argc, const char *argv[] )
+{/*
+    PoolAllocator p;
+    RefCountedPool<int, PoolAllocator> pool = RefCountedPoolFactory::create<int, PoolAllocator>(p, 2);
+        
     // Get int 1, give it back.
     PooledRefCount<int> i0 = pool->acquire();
-    i0.reset();
-    
     PooledRefCount<int> i1 = pool->acquire();
     PooledRefCount<int> i2 = pool->acquire();
     
@@ -192,6 +225,16 @@ int main(int argc, const char *argv[] )
     pool.reset();
     
     i2.reset();
+  */
+    
+    std::shared_ptr<TestSource> src( new TestSource );
+    std::shared_ptr<TestSink> sink( new TestSink );
+
+    
+    Ports::link( src->output(), sink->input() );
+    
+    Ports::unlink( src->output(), sink->input() );
+    
     
 }
 
