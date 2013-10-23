@@ -3,9 +3,10 @@
 
 #include "buffer.h"
 
+#include <string>
 #include <memory>
 #include <future>
-#include <vector>
+#include <unordered_map>
 
 namespace Stargazer {
     namespace Audio {
@@ -108,6 +109,19 @@ namespace Stargazer {
              */
             SourcePort( const AbstractStage &stage );
             
+            /** Pushes a processed buffer to the port. If there are pending 
+             *  pull requests, they will be fulfilled first before the buffer
+             *  if queued. */
+            void push();
+            
+            /**
+             *  Attempts to renegotiate the buffer format. Returns true if the 
+             *  linked sink will accept the new format, false otherwise. If 
+             *  negotiation is succesfull, the owning stage will be reconfigured
+             *  to output the new format.
+             */
+            bool tryNegotiateFormat( const BufferFormat &format );
+            
             /**
              *  Requeusts a buffer future.
              */
@@ -161,6 +175,13 @@ namespace Stargazer {
             SinkPort( const AbstractStage &stage );
             
             /**
+             *  Attempts to negotiate the buffer format. Upon successful negotiation,
+             *  all current receive requests will be cancelled, and the owner stage
+             *  will be reconfigured to support the new format.
+             */
+            bool tryNegotiateFormat( const BufferFormat &format );
+            
+            /**
              *  Attempts to receive a buffer future. Depending on the upstream synchronicity mode,
              *  calling get() on the received future may block. Calling receive multiple times before
              *  the future has been fulfilled will result in returning the same future.
@@ -196,19 +217,71 @@ namespace Stargazer {
          */
         class AbstractStage
         {
+
         public:
             
-            const std::vector< std::shared_ptr<SourcePort> > &sources() const {
-                return m_sources;
-            };
+            /** Collection type for source ports. */
+            typedef std::unordered_map<std::string, std::shared_ptr<SourcePort>> SourceCollection;
             
-            const std::vector< std::shared_ptr<SinkPort> > &sinks() const {
-                return m_sinks;
+            /** Collection type for sink ports. */
+            typedef std::unordered_map<std::string, std::shared_ptr<SinkPort>> SinkCollection;
+
+            typedef SourceCollection::iterator SourceIterator;
+            typedef SourceCollection::const_iterator ConstSourceIterator;
+            
+            typedef SinkCollection::iterator SinkIterator;
+            typedef SinkCollection::const_iterator ConstSinkIterator;
+            
+            typedef std::pair<SourceIterator, SourceIterator> SourceIteratorPair;
+            typedef std::pair<ConstSourceIterator, ConstSourceIterator> ConstSourceIteratorPair;
+            
+            typedef std::pair<SinkIterator, SinkIterator> SinkIteratorPair;
+            typedef std::pair<ConstSinkIterator, ConstSinkIterator> ConstSinkIteratorPair;
+            
+            
+
+            /* Source Interface */
+            
+            /** Retreives a source port by its name. */
+            bool sourcePort( const std::string &name, std::weak_ptr<SourcePort> *port );
+            
+            /** Gets an interator pair (begin, and end) for the source ports. */
+            ConstSourceIteratorPair sourcePortsIterator(){
+                return std::make_pair<ConstSourceIterator, ConstSourceIterator>(m_sources.begin(), m_sources.end());
+            }
+            
+            /** Gets the number of sources supported by the stage. */
+            int numberOfSources() const {
+                return m_sources.size();
+            }
+            
+            
+            /* Sink Interface */
+            
+            /** Retreives a sink port by its name. */
+            bool sinkPort( const std::string &name, std::weak_ptr<SinkPort> *port );
+            
+            /** Gets the number of sinks supported by the stage. */
+            int numberOfSinks() const {
+                return m_sinks.size();
             }
 
+            /** Gets an iterator pair (begin and end) for the sink ports. */
+            ConstSinkIteratorPair sinkPortsIterator(){
+                return std::make_pair<ConstSinkIterator, ConstSinkIterator>(m_sinks.begin(), m_sinks.end());
+            }
+
+
+
+            
+
         protected:
-            std::vector< std::shared_ptr<SourcePort> > m_sources;
-            std::vector< std::shared_ptr<SinkPort> > m_sinks;
+            
+            void addSourcePort( const std::string &name, SourcePort *port );
+            void addSinkPort( const std::string &name, SinkPort *port );
+            
+            SourceCollection m_sources;
+            SinkCollection m_sinks;
             
         };
         

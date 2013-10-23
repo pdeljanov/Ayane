@@ -183,13 +183,13 @@ public:
     
     TestSource() : AbstractStage()
     {
-        m_sources.push_back(std::make_shared<SourcePort>(*this));
+        addSourcePort("test-source", new SourcePort(*this));
 
     }
     
     std::shared_ptr<SourcePort> &output()
     {
-        return m_sources[0];
+        return m_sources["test-source"];
     }
 };
 
@@ -199,13 +199,13 @@ public:
     
     TestSink() : AbstractStage()
     {
-        m_sinks.push_back(std::make_shared<SinkPort>(*this));
+        addSinkPort("test-sink", new SinkPort(*this));
     }
     
     
     std::shared_ptr<SinkPort> &input()
     {
-        return m_sinks[0];
+        return m_sinks["test-sink"];
     }
 };
 

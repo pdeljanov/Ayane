@@ -29,9 +29,9 @@ bool Ports::link( std::shared_ptr<SourcePort> &source, std::shared_ptr<SinkPort>
     else
     {
         // Number of sources on the sender (i.e., the source port)
-        int numSources = source->m_stage.sources().size();
+        int numSources = source->m_stage.numberOfSources();
         // Number of sinks on the receiver (i.e., the sink port)
-        int numSinks = sink->m_stage.sinks().size();
+        int numSinks = sink->m_stage.numberOfSinks();
 
         // TODO: assert( (numSources > 0) && (numSinks > 0) );
         
@@ -80,4 +80,15 @@ SinkPort::SinkPort( const AbstractStage &stage ) :
     m_stage(stage)
 {
     
+}
+
+
+void AbstractStage::addSourcePort(const std::string &name, SourcePort *port)
+{
+    m_sources.insert( std::make_pair(name, std::shared_ptr<SourcePort>(port)) );
+}
+
+void AbstractStage::addSinkPort(const std::string &name, SinkPort *port)
+{
+    m_sinks.insert( std::make_pair(name, std::shared_ptr<SinkPort>(port)) );
 }
