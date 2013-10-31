@@ -16,7 +16,7 @@
 #include <cstdint>
 #include <exception>
 
-#define NUMBER_OF_ELEMENTS 48000
+#define NUMBER_OF_ELEMENTS 1920000
 
 class Stopwatch {
 public:
@@ -177,37 +177,144 @@ public:
 };
 
 
-class TestSource : public AbstractStage
+class TestSource : public Stage
 {
 public:
     
-    TestSource() : AbstractStage()
+    TestSource() : Stage(), m_dummy(nullptr)
     {
-        addSourcePort("test-source", new SourcePort(*this));
-
+        addSource("test-source", new Stage::Source(*this));
     }
     
-    std::shared_ptr<SourcePort> &output()
+    virtual bool beginPlayback() {
+        std::cout << "TestSource::beginPlayback" << std::endl;
+        return true;
+    }
+    
+    virtual bool stoppedPlayback() {
+        std::cout << "TestSource::stoppedPlayback" << std::endl;
+        return true;
+    }
+    
+    virtual void process( const Clock &clock ){
+        std::cout << "TestSource::process: Clock reads: "
+        << clock.time() << "(delta=" << clock.deltaTime() << ")." << std::endl;
+        
+        // Return an incrementing buffer.
+        
+        auto b = std::shared_ptr<Buffer>( BufferFactory::make(Float32, m_format, m_length) );
+        
+        std::cout << "TestSource::process: Pushing buffer: " << b.get() << std::endl;
+        
+        output()->push(b);
+    }
+    
+    virtual bool reconfigureSink( const Sink &sink ){
+        std::cout << "TestSource::reconfigureSink" << std::endl;
+        return true;
+    }
+
+    Source *output()
     {
         return m_sources["test-source"];
     }
+    
+    BufferFormat m_format;
+    BufferLength m_length;
+    int *m_dummy;
 };
 
-class TestSink : public AbstractStage
+
+class TestDSP : public Stage
 {
 public:
     
-    TestSink() : AbstractStage()
+    TestDSP() : Stage()
     {
-        addSinkPort("test-sink", new SinkPort(*this));
+        addSink("input", new Stage::Sink(*this));
+        addSource("output", new Stage::Source(*this));
     }
     
+    virtual bool beginPlayback() {
+        std::cout << "TestDSP::beginPlayback" << std::endl;
+        return true;
+    }
     
-    std::shared_ptr<SinkPort> &input()
+    virtual bool stoppedPlayback() {
+        std::cout << "TestDSP::stoppedPlayback" << std::endl;
+        return true;
+    }
+    
+    virtual void process( const Clock &clock ){
+        std::cout << "TestDSP::process: Clock reads: "
+        << clock.time() << "(delta=" << clock.deltaTime() << ")." << std::endl;
+        
+        std::shared_ptr<Buffer> b = input()->pull();
+        std::cout << "TestDSP::process: Forwarding buffer: " << b.get() << std::endl;
+        output()->push(b);
+    }
+    
+    virtual bool reconfigureSink( const Sink &sink ){
+        std::cout << "TestDSP::reconfigureSink" << std::endl;
+        return true;
+    }
+    
+    Sink *input()
+    {
+        return m_sinks["input"];
+    }
+    
+    Source *output()
+    {
+        return m_sources["output"];
+    }
+};
+
+
+class TestSink : public Stage
+{
+public:
+    
+    TestSink() : Stage()
+    {
+        addSink("test-sink", new Stage::Sink(*this));
+        
+        // Force an async connection on the input to emulate OS output behaviour.
+        input()->setScheduling(Sink::kForceAsynchronous);
+    }
+    
+
+    virtual bool beginPlayback() {
+        std::cout << "TestSink::beginPlayback" << std::endl;
+        return true;
+    }
+    
+    virtual bool stoppedPlayback() {
+        std::cout << "TestSink::stoppedPlayback" << std::endl;
+        return true;
+    }
+    
+    virtual void process( const Clock &clock ){
+        std::cout << "TestSink::process: Clock reads: "
+        << clock.time() << "(delta=" << clock.deltaTime() << ")." << std::endl;
+        
+        std::cout << "TestSink::process: Outputting: " << input()->pull().get() << "." << std::endl;
+    }
+    
+    virtual bool reconfigureSink( const Sink &sink ){
+        std::cout << "TestSink::reconfigureSink" << std::endl;
+        return true;
+    }
+    
+    Sink *input()
     {
         return m_sinks["test-sink"];
     }
+    
 };
+
+
+
 
 
 int main(int argc, const char *argv[] )
@@ -227,14 +334,44 @@ int main(int argc, const char *argv[] )
     i2.reset();
   */
     
-    std::shared_ptr<TestSource> src( new TestSource );
-    std::shared_ptr<TestSink> sink( new TestSink );
+    std::unique_ptr<TestSource> src( new TestSource );
+    std::unique_ptr<TestDSP> dsp( new TestDSP );
+    std::unique_ptr<TestSink> sink( new TestSink );
 
+    // Link.
+    Stage::link( src->output(), dsp->input() );
+    Stage::link( dsp->output(), sink->input() );
     
-    Ports::link( src->output(), sink->input() );
+    src->activate();
+    dsp->activate();
+    sink->activate();
     
-    Ports::unlink( src->output(), sink->input() );
+    src->play();
+    dsp->play();
+    sink->play();
     
+    while( true ) {
+
+        // Advance clock.
+        
+        char command;
+        std::cin >> command;
+        
+        if( command == 'q' ) {
+            break;
+        }
+        
+    }
+    
+    src->stop();
+    dsp->stop();
+    sink->stop();
+    
+    // Unlink.
+    Stage::unlink( src->output(), dsp->input() );
+    Stage::unlink( dsp->output(), sink->input() );    
+    
+
     
 }
 

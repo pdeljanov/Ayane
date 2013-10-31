@@ -46,10 +46,38 @@ namespace Stargazer
                 Deptch32bit
             };
             
+            /** Buffer stream flags. */
+            typedef enum
+            {
+                /** No specific flags set. */
+                kNone = 0,
+                
+                /** Format negotiation required. */
+                kFormatNegotiation = 1<<0
+            }
+            StreamFlag;
+            
+            typedef uint32_t StreamFlags;
+            
             Buffer ( const BufferFormat &format, const BufferLength &length );
             Buffer ( const Buffer &source );
 
             virtual ~Buffer();
+            
+            /** Streams a buffer stream flag. */
+            inline void setFlag( StreamFlag flag ){
+                m_flags |= flag;
+            }
+            
+            /** Unsets a buffer stream flag. */
+            inline void unsetFlag( StreamFlag flag ){
+                m_flags ^= flag;
+            }
+            
+            /** Gets the buffer stream flags. */
+            StreamFlags flags() const {
+                return m_flags;
+            }
             
             /** Get the audio buffer's timestamp.  A buffer's timestamp is the duration of time elapsed since the start
              * of the stream.
@@ -157,6 +185,8 @@ namespace Stargazer
             // Timestamp
             Duration m_timestamp;
             
+            // Buffer flags
+            StreamFlags m_flags;
         };
 
         

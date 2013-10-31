@@ -60,12 +60,15 @@ set( audio_SRCS
 	bufferframes.cpp
 	bufferformat.cpp
 	bufferlength.cpp
+	clock.cpp
 	refcountedpool.cpp
 	channels.cpp
 	duration.cpp
 	formatmismatchexception.cpp
 	formats.cpp
+	locklessqueue.cpp
 	messagebus.cpp
+	ports.cpp
 	pipeline.cpp
 	rawbuffer.cpp
   	)
@@ -78,12 +81,15 @@ set( audio_HDRS
 	bufferframes.h
 	bufferformat.h
 	bufferlength.h
+	clock.h
 	refcountedpool.h
 	channels.h
 	duration.h
 	formatmismatchexception.h
 	formats.h
+	locklessqueue.h
 	messagebus.h
+	ports.h
 	pipeline.h
 	rawbuffer.h
 	)
