@@ -7,6 +7,8 @@
 //  Copyright (c) 2013 Philip Deljanov. All rights reserved.
 //
 
+#include "clockprovider.h"
+#include "clockobserver.h"
 #include "buffer.h"
 #include "refcountedpool.h"
 #include "abstractstage.h"
@@ -15,6 +17,8 @@
 #include <iostream>
 #include <cstdint>
 #include <exception>
+
+#include <mutex>
 
 #define NUMBER_OF_ELEMENTS 1920000
 
@@ -176,6 +180,21 @@ public:
     };
 };
 
+#define SYNCHRONIZE_COUT
+
+#if defined(SYNCHRONIZE_COUT) 
+static std::mutex mutex;
+
+#define COUT( line ) \
+{ std::lock_guard<std::mutex> lock(mutex); std::cout << line << std::endl; }
+
+#else
+
+#define COUT( line ) \
+std::cout << line << std::endl;
+
+#endif
+
 
 class TestSource : public Stage
 {
@@ -183,7 +202,7 @@ public:
     
     TestSource() : Stage(), m_dummy(nullptr)
     {
-        addSource("test-source", new Stage::Source(*this));
+        addSource("decoder", new Stage::Source(*this));
     }
     
     virtual bool beginPlayback() {
@@ -196,27 +215,26 @@ public:
         return true;
     }
     
-    virtual void process( const Clock &clock ){
-        std::cout << "TestSource::process: Clock reads: "
-        << clock.time() << "(delta=" << clock.deltaTime() << ")." << std::endl;
+    virtual void process(){
+        COUT("TestSource::process: Clock reads: " << clock()->presentationTime()
+             << " (delta=" << clock()->deltaTime() << ").")
         
-        // Return an incrementing buffer.
         
         auto b = std::shared_ptr<Buffer>( BufferFactory::make(Float32, m_format, m_length) );
-        
-        std::cout << "TestSource::process: Pushing buffer: " << b.get() << std::endl;
-        
+        Buffer *ptrForMessage = b.get();
         output()->push(b);
+        
+        COUT("TestSource::process: Pushed buffer: " << ptrForMessage)
     }
     
     virtual bool reconfigureSink( const Sink &sink ){
-        std::cout << "TestSource::reconfigureSink" << std::endl;
+        COUT("TestSource::reconfigureSink")
         return true;
     }
 
     Source *output()
     {
-        return m_sources["test-source"];
+        return m_sources["decoder"];
     }
     
     BufferFormat m_format;
@@ -245,17 +263,20 @@ public:
         return true;
     }
     
-    virtual void process( const Clock &clock ){
-        std::cout << "TestDSP::process: Clock reads: "
-        << clock.time() << "(delta=" << clock.deltaTime() << ")." << std::endl;
+    virtual void process(){
+        COUT("TestDSP::process: Clock reads: " << clock()->presentationTime()
+             << " (delta=" << clock()->deltaTime() << ").")
+        
         
         std::shared_ptr<Buffer> b = input()->pull();
-        std::cout << "TestDSP::process: Forwarding buffer: " << b.get() << std::endl;
+        Buffer *ptrForMessage = b.get();
         output()->push(b);
+        
+        COUT("TestDSP::process: Forwarding buffer: " << ptrForMessage)
     }
     
     virtual bool reconfigureSink( const Sink &sink ){
-        std::cout << "TestDSP::reconfigureSink" << std::endl;
+        COUT("TestDSP::reconfigureSink")
         return true;
     }
     
@@ -277,7 +298,7 @@ public:
     
     TestSink() : Stage()
     {
-        addSink("test-sink", new Stage::Sink(*this));
+        addSink("speakers", new Stage::Sink(*this));
         
         // Force an async connection on the input to emulate OS output behaviour.
         input()->setScheduling(Sink::kForceAsynchronous);
@@ -294,21 +315,23 @@ public:
         return true;
     }
     
-    virtual void process( const Clock &clock ){
-        std::cout << "TestSink::process: Clock reads: "
-        << clock.time() << "(delta=" << clock.deltaTime() << ")." << std::endl;
+    virtual void process(){
+        COUT("TestSink::process: Clock reads: " << clock()->presentationTime()
+             << " (delta=" << clock()->deltaTime() << ").")
         
-        std::cout << "TestSink::process: Outputting: " << input()->pull().get() << "." << std::endl;
+        std::shared_ptr<Buffer> b( input()->pull() );
+        
+        COUT("TestSink::process: Outputting: " << b.get() << ".")
     }
     
     virtual bool reconfigureSink( const Sink &sink ){
-        std::cout << "TestSink::reconfigureSink" << std::endl;
+        COUT("TestSink::reconfigureSink")
         return true;
     }
     
     Sink *input()
     {
-        return m_sinks["test-sink"];
+        return m_sinks["speakers"];
     }
     
 };
@@ -318,21 +341,15 @@ public:
 
 
 int main(int argc, const char *argv[] )
-{/*
-    PoolAllocator p;
-    RefCountedPool<int, PoolAllocator> pool = RefCountedPoolFactory::create<int, PoolAllocator>(p, 2);
-        
-    // Get int 1, give it back.
-    PooledRefCount<int> i0 = pool->acquire();
-    PooledRefCount<int> i1 = pool->acquire();
-    PooledRefCount<int> i2 = pool->acquire();
+{
+    //* Will be done by pipeline.
+    std::unique_ptr<ClockProvider> cp( new ClockProvider() );
+    Clock *sinkClock = new Clock();
+    Clock *dspClock = new Clock();
     
-    i1.reset();
-    
-    pool.reset();
-    
-    i2.reset();
-  */
+    cp->registerClock(sinkClock);
+    cp->registerClock(dspClock);
+    //*
     
     std::unique_ptr<TestSource> src( new TestSource );
     std::unique_ptr<TestDSP> dsp( new TestDSP );
@@ -342,17 +359,17 @@ int main(int argc, const char *argv[] )
     Stage::link( src->output(), dsp->input() );
     Stage::link( dsp->output(), sink->input() );
     
+    //* Will be done by pipeline
     src->activate();
     dsp->activate();
     sink->activate();
     
-    src->play();
-    dsp->play();
-    sink->play();
+    src->play( dspClock->makeObserver() );
+    dsp->play( dspClock );
+    sink->play( sinkClock );
+    //*
     
     while( true ) {
-
-        // Advance clock.
         
         char command;
         std::cin >> command;
@@ -360,12 +377,17 @@ int main(int argc, const char *argv[] )
         if( command == 'q' ) {
             break;
         }
-        
+        else {
+            // Advance clock by 100 units.
+            cp->publish( 100.0f );
+        }
     }
     
+    //* Will be done by pipeline
     src->stop();
     dsp->stop();
     sink->stop();
+    //*
     
     // Unlink.
     Stage::unlink( src->output(), dsp->input() );

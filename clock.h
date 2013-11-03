@@ -1,14 +1,22 @@
 #ifndef STARGAZER_STDLIB_AUDIO_CLOCK_H_
 #define STARGAZER_STDLIB_AUDIO_CLOCK_H_
 
-#include <core/macros.h>
+#include "abstractclock.h"
+
+#include <list>
 #include <mutex>
 #include <condition_variable>
 
 namespace Stargazer {
     namespace Audio {
+
+        class ClockObserver;
         
-        class Clock {
+        /**
+         *  Represents a clock that is advanced asynchronously by an external
+         *  driver.
+         */
+        class Clock : public AbstractClock {
             
         public:
 
@@ -16,55 +24,99 @@ namespace Stargazer {
             ~Clock();
             
             /**
-             *  Gets the running time of the clock.
+             *  Gets the current timestamp of the pipeline.
              */
-            double time() const {
-                return m_currentTime;
+            virtual double pipelineTime() const {
+                return m_pipelineTime;
+            }
+            
+            /**
+             *  Gets the current output (playback) timestamp.
+             */
+            virtual double presentationTime() const {
+                return m_presentationTime;
             }
             
             /**
              *  Gets the time delta between the last two successive wait() 
              *  calls.
              */
-            double deltaTime() const {
+            virtual double deltaTime() const {
                 return m_deltaTime;
             }
             
             /**
              *  Starts the clock. Resets the running time.
              */
-            void start();
+            virtual void start();
             
             /**
              *  Stops the clock.
              */
-            void stop();
+            virtual void stop();
             
-            /** 
-             *  Advances the clock by the specified time delta. All threads that
-             *  are blocked on a wait() will be unblocked.
+            /**
+             *  Resets the clock to the specified time.
              */
-            void advance( double delta );
+            virtual void reset( double time = 0.0 );
+            
+            /**
+             *  Advances the presentation clock by the specified time delta.
+             *  All threads that are blocked on a wait() will be unblocked.
+             */
+            virtual void advancePresentation( double delta );
+
+            /**
+             *  Advances the pipeline clock by the specified time delta.
+             */
+            virtual void advancePipeline( double delta );
             
             /**
              *  Waits for the clock to advance. Returns true if the clock is 
              *  running, or false if it was stopped.
              */
-            bool wait();
+            virtual bool wait();
+            
+            /**
+             *  Factory method for creating a clock observer that uses the
+             *  instance of this clock as its reference.
+             */
+            ClockObserver *makeObserver();
+            
+            /**
+             *  Removes a clock observer.
+             */
+            void removeObserver( ClockObserver *observer );
             
         private:
             STARGAZER_DISALLOW_COPY_AND_ASSIGN(Clock);
             
+            // Is the clock started?
             bool m_started;
             
-            double m_currentTime;
-            double m_deltaTime;
-            double m_updatedTime;
+            // Pipeline time (current buffer timestamp).
+            double m_pipelineTime;
             
+            // Presentation time (playback timestamp).
+            double m_presentationTime;
+            
+            // Time between wait() calls.
+            double m_deltaTime;
+            
+            // Latest update delta.
+            double m_updateDelta;
+            
+            // Mutex to protect state.
             std::mutex m_mutex;
+            
+            // Condition variable to notify wait() of an advance().
             std::condition_variable m_cond;
             
+            // List of observing clocks.
+            std::list<ClockObserver*> m_observers;
         };
+        
+        
         
     }
 }

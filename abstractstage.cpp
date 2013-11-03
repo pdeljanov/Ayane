@@ -6,7 +6,7 @@ using namespace Stargazer::Audio;
 
 /* Stage */
 
-Stage::Stage() : m_state(kDeactivated), m_processingAsync(false)
+Stage::Stage() : m_state(kDeactivated), m_clock(nullptr), m_processingAsync(false)
 {
     
 }
@@ -19,8 +19,8 @@ Stage::~Stage()
 
 void Stage::asyncProcessLoop()
 {
-    while(m_clock.wait()) {
-        process( m_clock );
+    while(m_clock->wait()) {
+        process();
     }
 
     std::cout << "Stage::asyncProcessLoop: Processing thread with ID: "
@@ -32,7 +32,7 @@ void Stage::startAsyncProcess()
     if( !m_thread.joinable() ){
 
         // Start the clock.
-        m_clock.start();
+        m_clock->start();
         m_thread = std::thread( &Stage::asyncProcessLoop, this );
         
         std::cout << "Stage::startAsyncProcess: Started thread with ID: "
@@ -54,12 +54,72 @@ void Stage::stopAsyncProcess()
         " stop." << std::endl;
         
         // Stop the clock. Processing thread will exit
-        m_clock.stop();
+        m_clock->stop();
         m_thread.join();
         
         std::cout << "Stage::stopAsyncProcess: Processing thread stopped."
         << std::endl;
     }
+}
+
+bool Stage::shouldRunAsynchronous() const {
+    
+    /* Synchonicity mode
+     *
+     * The synchonicity mode of the stage is determined by the scheduling
+     * mode of downstream sink ports, and the number of source ports.
+     *
+     *                       |  # of Sinks (receiver)
+     *  ---------------------+-----------+------------
+     *                       |    One    |   Many
+     *  ----------------------------------------------
+     *  # of Sources | One   |   Sync    |   Async
+     *    (sender)   | Many  |   Async   |   Async
+     *
+     * However, if a source's sink is in ForceAsynchonous mode, the stage
+     * will always operate asynchonously.
+     *
+     */
+    
+    // Pure sink node.
+    if( sourceCount() == 0 ) {
+        return true;
+    }
+    // If the stage has multiple sources, use async mode. Otherwise, use
+    // downstream parameters to determine is async mode is needed.
+    else if( sourceCount() > 1 ) {
+        return true;
+    }
+    else
+    {
+        for(ConstSourceIterator iter = m_sources.begin(), end = m_sources.end();
+            iter != end; ++iter)
+        {
+            const Sink *sink = iter->second->m_sink;
+            
+            // Ignore if source is unlinked.
+            if( sink == nullptr ) {
+                continue;
+            }
+            
+            // If a downstream sink forces async operation, use async mode.
+            if(sink->scheduling() == Sink::kForceAsynchronous) {
+                
+                std::cout << "Stage::shouldRunAsynchronous: Sink: " << sink
+                << " (on Source: " << iter->first
+                << ") forcing asynchronous operation." << std::endl;
+                
+                return true;
+            }
+            
+            // If a downstream sink has multiple sinks, use async mode.
+            if( sink->m_stage.sinkCount() > 1 ) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
 }
 
 
@@ -68,73 +128,13 @@ bool Stage::activate()
     std::lock_guard<std::mutex> lock(m_mutex);
     
     // Deactivated -> Activated.
-    if( m_state == kDeactivated )
-    {
-        /* Synchonicity mode
-         *
-         * The synchonicity mode of the stage is determined by the scheduling 
-         * mode of downstream sink ports, and the number of source ports.
-         *
-         *                       |  # of Sinks (receiver)
-         *  ---------------------+-----------+------------
-         *                       |    One    |   Many
-         *  ----------------------------------------------
-         *  # of Sources | One   |   Sync    |   Async
-         *    (sender)   | Many  |   Async   |   Async
-         *
-         * However, if a source's sink is in ForceAsynchonous mode, the stage 
-         * will always operate asynchonously.
-         *
-         */
+    if( m_state == kDeactivated ) {
         
-        Source::SynchronicityMode mode = Source::kSynchronous;
-
-        // If the stage has multiple sources, use async mode. Otherwise, use
-        // downstream parameters to determine is async mode is needed.
-        if( sourceCount() > 1 ) {
-            mode = Source::kAsynchronous;
-        }
-        else
-        {
-            for(SourceIterator iter = m_sources.begin(), end = m_sources.end();
-                iter != end; ++iter)
-            {
-                const Sink *sink = iter->second->m_sink;
-
-                // If a downstream sink forces async operation, use async mode.
-                if(sink->scheduling() == Sink::kForceAsynchronous) {
-                    
-                    std::cout << "Stage::activate: Sink: " << sink << " ("
-                    << iter->first << ") forced asynchronous operation."
-                    << std::endl;
-                    
-                    mode = Source::kAsynchronous;
-                    break;
-                }
-                
-                // If a downstream sink has multiple sinks, use async mode.
-                if( sink->m_stage.sinkCount() > 1 ) {
-                    mode = Source::kAsynchronous;
-                    break;
-                }
-            }
-        }
-
-        // Assign synchronicity mode to the sources.
-        for(SourceIterator iter = m_sources.begin(), end = m_sources.end();
-            iter != end; ++iter)
-        {
-            iter->second->m_synchronicity = mode;
-        }
-
-        m_processingAsync = (mode == Source::kAsynchronous);
-
         // Switch state to activated.
         m_state = kActivated;
         
-        std::cout << "Stage::activate: Stage (" << this << ") activated in "
-        << ((mode == Source::kSynchronous) ? "synchronous" : "asynchronous")
-        << " mode." << std::endl;
+        std::cout << "Stage::activate: Stage (" << this << ") activated."
+        << std::endl;
         
         return true;
     }
@@ -170,13 +170,33 @@ void Stage::deactivate()
     }
 }
 
-void Stage::play()
+void Stage::play( AbstractClock *clock )
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     // Activated (Stopped) -> Playing
     if( m_state == kActivated ) {
         
+        // Set the clock.
+        m_clock = clock;
+        
+        // Determine synchronicity.
+        m_processingAsync = shouldRunAsynchronous();
+        
+        std::cout << "Stage::play: Stage (" << this << ") will run "
+        << (m_processingAsync ? "asynchronously." : "synchronously.")
+        << std::endl;
+        
+        // Assign synchronicity mode to the sources.
+        Source::SynchronicityMode mode =
+            (m_processingAsync) ? Source::kAsynchronous : Source::kSynchronous;
+        
+        for(SourceIterator iter = m_sources.begin(), end = m_sources.end();
+            iter != end; ++iter)
+        {
+            iter->second->m_synchronicity = mode;
+        }
+
         // Begin playback callback. Must occur before buffers are processed!
         beginPlayback();
  
@@ -186,11 +206,14 @@ void Stage::play()
         }
         else {
             // Start the clock manually in synchronous mode.
-            m_clock.start();
+            m_clock->start();
         }
         
         // Record the state.
         m_state = kPlaying;
+        
+        std::cout << "Stage::play: Stage (" << this << ") playing."
+        << std::endl;
     }
     
 }
@@ -211,7 +234,7 @@ void Stage::stopNoLock()
         }
         else {
             // If synchronous, stop the clock manually.
-            m_clock.stop();
+            m_clock->stop();
         }
         
         // Playback stopped callback. Must occur after all buffers are
@@ -388,7 +411,7 @@ bool Stage::Source::pull( std::shared_ptr<Buffer> &buffer )
 
             // Generate a buffer only if one isn't already pending.
             if( m_buffers.empty() ) {
-                m_stage.process( m_stage.m_clock );
+                m_stage.process();
             }
             
             // Return the popped buffer.

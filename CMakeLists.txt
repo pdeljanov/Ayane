@@ -54,13 +54,15 @@ set( audio_trusted_HDRS
 
 # Sources common to both trusted and untrusted builds of audio.
 set( audio_SRCS
-	abstractclocksource.cpp
+	abstractclock.cpp
 	abstractstage.cpp
 	buffer.cpp
 	bufferframes.cpp
 	bufferformat.cpp
 	bufferlength.cpp
 	clock.cpp
+	clockobserver.cpp
+	clockprovider.cpp
 	refcountedpool.cpp
 	channels.cpp
 	duration.cpp
@@ -75,13 +77,15 @@ set( audio_SRCS
 
 # Headers common to both trusted and untrusted builds of audio.
 set( audio_HDRS
-	abstractclocksource.h
+	abstractclock.h
 	abstractstage.h
 	buffer.h
 	bufferframes.h
 	bufferformat.h
 	bufferlength.h
 	clock.h
+	clockobserver.h
+	clockprovider.h
 	refcountedpool.h
 	channels.h
 	duration.h
@@ -109,7 +113,6 @@ if( STARGAZER_IS_PLATFORM )
 			)
 		
 	target_link_libraries( stargazer_stdlib_audio-pexe 
-							stargazer_stdlib_core-pexe
 							)
 	
 	install( TARGETS stargazer_stdlib_audio-pexe
@@ -140,7 +143,6 @@ else()
 
 	target_link_libraries( stargazer_stdlib_audio
 							stargazer_stdlib_audio-host 
-                            stargazer_stdlib_core
 							)
 
 	add_executable( stargazer_stdlib_audio-benchmark benchmark.cpp )

@@ -182,7 +182,7 @@ namespace Stargazer {
                 /**
                  *  Sets the scheduling mode. Only valid before a port is linked.
                  */
-                bool setScheduling(SchedulingMode mode) {
+                void setScheduling(SchedulingMode mode) {
                     m_scheduling = mode;
                 }
                 
@@ -291,7 +291,7 @@ namespace Stargazer {
              *  Starts playback. Once called, the stage will produce buffers
              *  clocked by the clock provider. Thread-safe.
              */
-            void play();
+            void play( AbstractClock *clock );
             
             /** 
              *  Stops playback. Thread-safe. 
@@ -300,16 +300,19 @@ namespace Stargazer {
             
 
 
-            
-
-            
+            /**
+             *  Gets the stage's state.
+             */
+            State state() const {
+                return m_state;
+            }
             
             
             /** 
              *  Called by the Stage when the next set of buffers should be
              *  pushed to the Stage's sources.
              */
-            virtual void process( const Clock &clock ) = 0;
+            virtual void process() = 0;
 
             /**
              *  Called by the Stage when the buffer format of sink changes.
@@ -322,8 +325,14 @@ namespace Stargazer {
             virtual bool reconfigureSink( const Sink &sink ) = 0;
             
 
-            
+            /**
+             *  Links the specified source and sink together.
+             */
             static bool link( Source *source, Sink *sink );
+            
+            /**
+             *  Unlinks the specified source from the sink.
+             */
             static void unlink( Source *source, Sink *sink );
             
         protected:
@@ -334,6 +343,12 @@ namespace Stargazer {
             void addSink( const std::string &name, Sink *port );
             void removeSink( const std::string &name );
             
+            /**
+             *  Gets the stage clock.
+             */
+            AbstractClock *clock() const {
+                return m_clock;
+            }
             
             /** Called by the Stage when transitioning from Activated to
              *  Playing.
@@ -369,13 +384,19 @@ namespace Stargazer {
             /** Stop function without locking. */
             void stopNoLock();
             
+            /** 
+             *  Determines if the stage should opeate asynchronously given the
+             *  current configuration.
+             */
+            bool shouldRunAsynchronous() const;
+            
             // State mutex.
             std::mutex m_mutex;
             State m_state;
             
             // Thread for asynchronous processing.
             std::thread m_thread;
-            Clock m_clock;
+            AbstractClock *m_clock;
             bool m_processingAsync;
 
         };
