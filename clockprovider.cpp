@@ -10,11 +10,11 @@ ClockProvider::~ClockProvider() {
     
 }
 
-void ClockProvider::registerClock(Stargazer::Audio::Clock *clock) {
+void ClockProvider::registerClock(Clock *clock) {
     m_subscribers.push_back(clock);
 }
 
-void ClockProvider::deregisterClock(Stargazer::Audio::Clock *clock) {
+void ClockProvider::deregisterClock(Clock *clock) {
     m_subscribers.remove(clock);
 }
 

@@ -68,9 +68,7 @@ set( audio_SRCS
 	duration.cpp
 	formatmismatchexception.cpp
 	formats.cpp
-	locklessqueue.cpp
 	messagebus.cpp
-	ports.cpp
 	pipeline.cpp
 	rawbuffer.cpp
   	)
@@ -91,9 +89,7 @@ set( audio_HDRS
 	duration.h
 	formatmismatchexception.h
 	formats.h
-	locklessqueue.h
 	messagebus.h
-	ports.h
 	pipeline.h
 	rawbuffer.h
 	)

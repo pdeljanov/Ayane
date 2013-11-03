@@ -38,14 +38,7 @@ namespace Stargazer
             friend class TypedBuffer;
             
         public:
-            
-            /** Enumeration of fixed point sample depths. **/
-            enum FixedPointDepth
-            {
-                Depth24bit,
-                Deptch32bit
-            };
-            
+
             /** Buffer stream flags. */
             typedef enum
             {
@@ -64,42 +57,55 @@ namespace Stargazer
 
             virtual ~Buffer();
             
-            /** Streams a buffer stream flag. */
+            /** 
+             *  Sets a buffer stream flag. 
+             */
             inline void setFlag( StreamFlag flag ){
                 m_flags |= flag;
             }
             
-            /** Unsets a buffer stream flag. */
+            /** 
+             *  Unsets a buffer stream flag. 
+             */
             inline void unsetFlag( StreamFlag flag ){
                 m_flags ^= flag;
             }
             
-            /** Gets the buffer stream flags. */
+            /**
+             *  Gets the buffer stream flags. 
+             */
             StreamFlags flags() const {
                 return m_flags;
             }
             
-            /** Get the audio buffer's timestamp.  A buffer's timestamp is the duration of time elapsed since the start
-             * of the stream.
-             **/
+            /** 
+             *  Get the buffer's presentation timestamp. The presentation
+             *  timestamp at which the buffer should be played.
+             */
             const Duration &timestamp() const;
             
+            /**
+             *  Sets the buffer's presentation timestamp.
+             */
             void setTimestamp ( const Duration &timestamp );
             
-            /** Get the duration of the buffer.
-             **/
+            /** 
+             *  Get the duration of the buffer.
+             */
             Duration duration() const;
 
             
-            /** Returns the amount of frames the buffer can contain. **/
+            /** 
+             *  Returns the maximum amount of frames the buffer may contain.
+             */
             unsigned int frames() const;
             
             
             /**
-             * Returns the multichannel audio format mode descriptor.
+             *  Returns the buffer format descriptor.
              *
-             * \return The multichannel audio format.
-             **/
+             *  \return The buffer format.
+             */
             const BufferFormat &format() const;
             
 
@@ -111,11 +117,13 @@ namespace Stargazer
              * \param source The source buffer to copy from.
              *
              * \return True on success, false otherwise.
-             **/
+             */
             bool copy ( const Buffer &source );
 
             
-            
+            /**
+             *  Gets the buffer's sample format.
+             */
             virtual SampleFormat sampleFormat() const = 0;
             
             
@@ -141,31 +149,90 @@ namespace Stargazer
              *
              */
             
+            /* Writers */
+    
             virtual Buffer& operator<< (const Mono<SampleInt16>& ) = 0;
+            virtual Buffer& operator<< (const Mono<SampleInt32>& ) = 0;
             virtual Buffer& operator<< (const Mono<SampleFloat32>& ) = 0;
+            virtual Buffer& operator<< (const Mono<SampleFloat64>& ) = 0;
             
             virtual Buffer& operator<< ( const Stereo<SampleInt16>& ) = 0;
+            virtual Buffer& operator<< ( const Stereo<SampleInt32>& ) = 0;
             virtual Buffer& operator<< ( const Stereo<SampleFloat32>& ) = 0;
+            virtual Buffer& operator<< ( const Stereo<SampleFloat64>& ) = 0;
     
             virtual Buffer& operator<< ( const Stereo21<SampleInt16>& ) = 0;
+            virtual Buffer& operator<< ( const Stereo21<SampleInt32>& ) = 0;
             virtual Buffer& operator<< ( const Stereo21<SampleFloat32>& ) = 0;
+            virtual Buffer& operator<< ( const Stereo21<SampleFloat64>& ) = 0;
             
             virtual Buffer& operator<< ( const MultiChannel3<SampleInt16>& ) = 0;
+            virtual Buffer& operator<< ( const MultiChannel3<SampleInt32>& ) = 0;
             virtual Buffer& operator<< ( const MultiChannel3<SampleFloat32>& ) = 0;
+            virtual Buffer& operator<< ( const MultiChannel3<SampleFloat64>& ) = 0;
             
             virtual Buffer& operator<< ( const MultiChannel4<SampleInt16>& ) = 0;
+            virtual Buffer& operator<< ( const MultiChannel4<SampleInt32>& ) = 0;
             virtual Buffer& operator<< ( const MultiChannel4<SampleFloat32>& ) = 0;
+            virtual Buffer& operator<< ( const MultiChannel4<SampleFloat64>& ) = 0;
             
             virtual Buffer& operator<< ( const MultiChannel5<SampleInt16>& ) = 0;
+            virtual Buffer& operator<< ( const MultiChannel5<SampleInt32>& ) = 0;
             virtual Buffer& operator<< ( const MultiChannel5<SampleFloat32>& ) = 0;
+            virtual Buffer& operator<< ( const MultiChannel5<SampleFloat64>& ) = 0;
             
             virtual Buffer& operator<< ( const MultiChannel6<SampleInt16>& ) = 0;
+            virtual Buffer& operator<< ( const MultiChannel6<SampleInt32>& ) = 0;
             virtual Buffer& operator<< ( const MultiChannel6<SampleFloat32>& ) = 0;
+            virtual Buffer& operator<< ( const MultiChannel6<SampleFloat64>& ) = 0;
 
             virtual Buffer& operator<< ( const MultiChannel7<SampleInt16>& ) = 0;
+            virtual Buffer& operator<< ( const MultiChannel7<SampleInt32>& ) = 0;
             virtual Buffer& operator<< ( const MultiChannel7<SampleFloat32>& ) = 0;
+            virtual Buffer& operator<< ( const MultiChannel7<SampleFloat64>& ) = 0;
             
-
+            /* Readers */
+            
+            virtual Buffer& operator>> ( Mono<SampleInt16>& ) = 0;
+            virtual Buffer& operator>> ( Mono<SampleInt32>& ) = 0;
+            virtual Buffer& operator>> ( Mono<SampleFloat32>& ) = 0;
+            virtual Buffer& operator>> ( Mono<SampleFloat64>& ) = 0;
+            
+            virtual Buffer& operator>> ( Stereo<SampleInt16>& ) = 0;
+            virtual Buffer& operator>> ( Stereo<SampleInt32>& ) = 0;
+            virtual Buffer& operator>> ( Stereo<SampleFloat32>& ) = 0;
+            virtual Buffer& operator>> ( Stereo<SampleFloat64>& ) = 0;
+            
+            virtual Buffer& operator>> ( Stereo21<SampleInt16>& ) = 0;
+            virtual Buffer& operator>> ( Stereo21<SampleInt32>& ) = 0;
+            virtual Buffer& operator>> ( Stereo21<SampleFloat32>& ) = 0;
+            virtual Buffer& operator>> ( Stereo21<SampleFloat64>& ) = 0;
+            
+            virtual Buffer& operator>> ( MultiChannel3<SampleInt16>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel3<SampleInt32>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel3<SampleFloat32>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel3<SampleFloat64>& ) = 0;
+            
+            virtual Buffer& operator>> ( MultiChannel4<SampleInt16>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel4<SampleInt32>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel4<SampleFloat32>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel4<SampleFloat64>& ) = 0;
+            
+            virtual Buffer& operator>> ( MultiChannel5<SampleInt16>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel5<SampleInt32>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel5<SampleFloat32>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel5<SampleFloat64>& ) = 0;
+            
+            virtual Buffer& operator>> ( MultiChannel6<SampleInt16>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel6<SampleInt32>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel6<SampleFloat32>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel6<SampleFloat64>& ) = 0;
+            
+            virtual Buffer& operator>> ( MultiChannel7<SampleInt16>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel7<SampleInt32>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel7<SampleFloat32>& ) = 0;
+            virtual Buffer& operator>> ( MultiChannel7<SampleFloat64>& ) = 0;
+            
             /* --- Buffer Ops Overloads --- */
             
             /*
@@ -174,6 +241,8 @@ namespace Stargazer
              */
             
             virtual Buffer &operator<< ( const Buffer& ) = 0;
+            
+            virtual Buffer &operator>> ( Buffer& ) = 0;
             
             //virtual Buffer &operator* ( const Buffer& ) = 0;
             
@@ -204,29 +273,46 @@ namespace Stargazer
             
             virtual SampleFormat sampleFormat() const;
             
+            /* Writers */
             virtual TypedBuffer<T>& operator<< (const Mono<SampleInt16>& );
+            virtual TypedBuffer<T>& operator<< (const Mono<SampleInt32>& );
             virtual TypedBuffer<T>& operator<< (const Mono<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator<< (const Mono<SampleFloat64>& );
             
             virtual TypedBuffer<T>& operator<< ( const Stereo<SampleInt16>& );
+            virtual TypedBuffer<T>& operator<< ( const Stereo<SampleInt32>& );
             virtual TypedBuffer<T>& operator<< ( const Stereo<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator<< ( const Stereo<SampleFloat64>& );
 
             virtual TypedBuffer<T>& operator<< ( const Stereo21<SampleInt16>& );
+            virtual TypedBuffer<T>& operator<< ( const Stereo21<SampleInt32>& );
             virtual TypedBuffer<T>& operator<< ( const Stereo21<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator<< ( const Stereo21<SampleFloat64>& );
             
             virtual TypedBuffer<T>& operator<< ( const MultiChannel3<SampleInt16>& );
+            virtual TypedBuffer<T>& operator<< ( const MultiChannel3<SampleInt32>& );
             virtual TypedBuffer<T>& operator<< ( const MultiChannel3<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator<< ( const MultiChannel3<SampleFloat64>& );
             
             virtual TypedBuffer<T>& operator<< ( const MultiChannel4<SampleInt16>& );
+            virtual TypedBuffer<T>& operator<< ( const MultiChannel4<SampleInt32>& );
             virtual TypedBuffer<T>& operator<< ( const MultiChannel4<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator<< ( const MultiChannel4<SampleFloat64>& );
             
             virtual TypedBuffer<T>& operator<< ( const MultiChannel5<SampleInt16>& );
+            virtual TypedBuffer<T>& operator<< ( const MultiChannel5<SampleInt32>& );
             virtual TypedBuffer<T>& operator<< ( const MultiChannel5<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator<< ( const MultiChannel5<SampleFloat64>& );
 
             virtual TypedBuffer<T>& operator<< ( const MultiChannel6<SampleInt16>& );
+            virtual TypedBuffer<T>& operator<< ( const MultiChannel6<SampleInt32>& );
             virtual TypedBuffer<T>& operator<< ( const MultiChannel6<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator<< ( const MultiChannel6<SampleFloat64>& );
             
             virtual TypedBuffer<T>& operator<< ( const MultiChannel7<SampleInt16>& );
+            virtual TypedBuffer<T>& operator<< ( const MultiChannel7<SampleInt32>& );
             virtual TypedBuffer<T>& operator<< ( const MultiChannel7<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator<< ( const MultiChannel7<SampleFloat64>& );
             
             virtual TypedBuffer<T> &operator<< ( const Buffer& );
 
@@ -259,6 +345,78 @@ namespace Stargazer
             void write( const TypedBuffer<InSampleType> &buffer );
 
             
+            /* Readers */
+            virtual TypedBuffer<T>& operator>> ( Mono<SampleInt16>& );
+            virtual TypedBuffer<T>& operator>> ( Mono<SampleInt32>& );
+            virtual TypedBuffer<T>& operator>> ( Mono<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator>> ( Mono<SampleFloat64>& );
+            
+            virtual TypedBuffer<T>& operator>> ( Stereo<SampleInt16>& );
+            virtual TypedBuffer<T>& operator>> ( Stereo<SampleInt32>& );
+            virtual TypedBuffer<T>& operator>> ( Stereo<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator>> ( Stereo<SampleFloat64>& );
+            
+            virtual TypedBuffer<T>& operator>> ( Stereo21<SampleInt16>& );
+            virtual TypedBuffer<T>& operator>> ( Stereo21<SampleInt32>& );
+            virtual TypedBuffer<T>& operator>> ( Stereo21<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator>> ( Stereo21<SampleFloat64>& );
+            
+            virtual TypedBuffer<T>& operator>> ( MultiChannel3<SampleInt16>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel3<SampleInt32>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel3<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel3<SampleFloat64>& );
+            
+            virtual TypedBuffer<T>& operator>> ( MultiChannel4<SampleInt16>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel4<SampleInt32>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel4<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel4<SampleFloat64>& );
+            
+            virtual TypedBuffer<T>& operator>> ( MultiChannel5<SampleInt16>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel5<SampleInt32>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel5<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel5<SampleFloat64>& );
+            
+            virtual TypedBuffer<T>& operator>> ( MultiChannel6<SampleInt16>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel6<SampleInt32>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel6<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel6<SampleFloat64>& );
+            
+            virtual TypedBuffer<T>& operator>> ( MultiChannel7<SampleInt16>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel7<SampleInt32>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel7<SampleFloat32>& );
+            virtual TypedBuffer<T>& operator>> ( MultiChannel7<SampleFloat64>& );
+            
+            virtual TypedBuffer<T>& operator>> ( Buffer& );
+            
+            
+            template<typename OutSampleType>
+            force_inline void read( Mono<OutSampleType> &frame );
+            
+            template<typename OutSampleType>
+            force_inline void read( Stereo<OutSampleType> &frame );
+            
+            template<typename OutSampleType>
+            force_inline void read( Stereo21<OutSampleType> &frame );
+            
+            template<typename OutSampleType>
+            force_inline void read( MultiChannel3<OutSampleType> &frame );
+            
+            template<typename OutSampleType>
+            force_inline void read( MultiChannel4<OutSampleType> &frame );
+            
+            template<typename OutSampleType>
+            force_inline void read( MultiChannel5<OutSampleType> &frame );
+            
+            template<typename OutSampleType>
+            force_inline void read( MultiChannel6<OutSampleType> &frame );
+            
+            template<typename OutSampleType>
+            force_inline void read( MultiChannel7<OutSampleType> &frame );
+            
+            template<typename OutSampleType>
+            void read( TypedBuffer<OutSampleType> &buffer );
+            
+            
         private:
             
             typedef T* ChannelMap[11];
@@ -275,8 +433,10 @@ namespace Stargazer
             
             
             template<typename InSampleType>
-            void writeChannel( Channel ch, T &output, InSampleType is );
+            void writeChannel( Channel ch, T &os, InSampleType is );
 
+            template<typename OutSampleType>
+            void readChannel( Channel ch, T &is, OutSampleType &os );
             
         };
         

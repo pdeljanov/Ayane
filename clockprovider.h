@@ -21,12 +21,12 @@ namespace Stargazer {
             /**
              *  Registers a clock to be notified of clock events.
              */
-            void registerClock( Clock* );
+            void registerClock( Clock* clock );
             
             /**
              *  Cancels a clock's subscription to clock events.
              */
-            void deregisterClock( Clock* );
+            void deregisterClock( Clock* clock );
             
             /**
              *  Publishes a clock event to the provider's subscribers.
