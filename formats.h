@@ -79,22 +79,22 @@ namespace Stargazer
         typedef enum
         {
             /** Unsigned 8bit integer sample format. */
-            UInt8 = 0,
+            kUInt8 = 0,
             
             /** Signed 16bit integer sample format. */
-            Int16,
+            kInt16,
             
             /** Signed 24bit integer sample format. */
-            Int24,
+            kInt24,
             
             /** Signed 32bit integer sample format. */
-            Int32,
+            kInt32,
             
             /** 32bit floating point sample format. */
-            Float32,
+            kFloat32,
             
             /** 64bit floating point sample format. */
-            Float64
+            kFloat64
             
         } SampleFormat;
         

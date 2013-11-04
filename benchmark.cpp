@@ -13,6 +13,8 @@
 #include "refcountedpool.h"
 #include "abstractstage.h"
 
+#include <audio/host/mac/coreaudioendpoint.h>
+
 #include <vector>
 #include <iostream>
 #include <cstdint>
@@ -60,13 +62,13 @@ public:
     {
         switch (sampleFormat)
         {
-            case Int16:
+            case kInt16:
                 return new Int16Buffer(format, length);
-            case Int32:
+            case kInt32:
                 return new Int32Buffer(format, length);
-            case Float32:
+            case kFloat32:
                 return new Float32Buffer(format, length);
-            case Float64:
+            case kFloat64:
                 return new Float64Buffer(format, length);
             default:
                 return nullptr;
@@ -220,7 +222,7 @@ public:
              << " (delta=" << clock()->deltaTime() << ").")
         
         
-        auto b = std::shared_ptr<Buffer>( BufferFactory::make(Float32, m_format, m_length) );
+        auto b = std::shared_ptr<Buffer>( BufferFactory::make(kFloat32, m_format, m_length) );
         Buffer *ptrForMessage = b.get();
         output()->push(b);
         
@@ -342,6 +344,7 @@ public:
 
 int main(int argc, const char *argv[] )
 {
+
     //* Will be done by pipeline.
     std::unique_ptr<ClockProvider> cp( new ClockProvider() );
     Clock *sinkClock = new Clock();
@@ -392,6 +395,8 @@ int main(int argc, const char *argv[] )
     // Unlink.
     Stage::unlink( src->output(), dsp->input() );
     Stage::unlink( dsp->output(), sink->input() );    
+    
+
     
 
     

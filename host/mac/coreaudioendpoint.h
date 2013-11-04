@@ -1,0 +1,136 @@
+/*
+ *
+ * Copyright (c) 2013 Philip Deljanov. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ *
+ */
+
+#ifndef STARGAZER_STDLIB_AUDIO_HOST_MAC_COREAUDIOENDPOINT_H_
+#define STARGAZER_STDLIB_AUDIO_HOST_MAC_COREAUDIOENDPOINT_H_
+
+#include <CoreAudio/CoreAudioTypes.h>
+#include <AudioToolbox/AudioToolbox.h>
+
+#include <audio/abstractstage.h>
+
+#include <vector>
+#include <memory>
+
+namespace Stargazer {
+    namespace Audio {
+     
+        typedef enum {
+            
+            kShared = 0,
+            kExclusive
+            
+        } SharingMode;       
+        
+        
+        class CoreAudioEndpoint : public Stage {
+            
+        public:
+            
+            CoreAudioEndpoint();
+            ~CoreAudioEndpoint();
+            
+            /**
+             *  Gets the output sharing mode.
+             */
+            SharingMode sharingMode() const;
+            
+            /**
+             *  Attempts to set the audio device sharing mode.
+             *
+             *  \returns True if setting the sharing mode was succesful, false
+             *           otherwise.
+             */
+            bool setSharingMode( SharingMode mode );
+
+
+            Sink *input();
+            
+            
+        private:
+            
+            virtual bool beginPlayback();
+            virtual bool stoppedPlayback();
+            virtual void process();
+            virtual bool reconfigureSink( const Sink &sink );
+            
+            
+            
+            bool createOutputDeviceUID(CFStringRef& deviceUID) const;
+            bool setOutputDeviceUID(CFStringRef deviceUID);
+            
+            bool outputDeviceID(AudioDeviceID& deviceID) const;
+            bool setOutputDeviceID(AudioDeviceID deviceID);
+            
+            bool outputDeviceSampleRate(Float64& sampleRate) const;
+            bool setOutputDeviceSampleRate(Float64 sampleRate);
+
+
+            bool openOutput();
+            bool closeOutput();
+            
+            bool startOutput();
+            bool stopOutput();
+            
+            bool isOutputRunning() const;
+            
+            bool resetOutput();
+            
+
+            
+            
+            bool saveGraphInteractions( std::vector<AUNodeInteraction> &interactions );
+            bool restoreGraphInteractions( std::vector<AUNodeInteraction> &interactions);
+            
+            bool setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
+                                           const void *propertyData,
+                                           UInt32 propertyDataSize);
+            
+            bool setAUGraphSampleRateAndChannelLayout(Float64 sampleRate,
+                                                      UInt32 channelsPerFrame);
+            
+			bool setAUOutputChannelLayout(AudioChannelLayout *channelLayout);
+            
+            
+            
+            // Audio Unit graph
+            AUGraph mAUGraph;
+            
+            // Output node.
+            AUNode mAUOutput;
+            
+            // Audio format for the AU graph.
+            AudioStreamBasicDescription			mAUFormat;
+            
+            // Channel layout for the AU graph.
+            std::unique_ptr<AudioChannelLayout>	mAUChannelLayout;
+            
+            UInt32 mMaxFramesPerSlice;
+            
+        public:
+            
+            // AUNode render callback.
+			OSStatus render(AudioUnitRenderActionFlags		*ioActionFlags,
+							const AudioTimeStamp			    *inTimeStamp,
+							UInt32							 inBusNumber,
+							UInt32							 inNumberFrames,
+							AudioBufferList					*ioData);
+			
+            // AUGraph render notification.
+			OSStatus renderNotify(AudioUnitRenderActionFlags *ioActionFlags,
+								  const AudioTimeStamp		 *inTimeStamp,
+								  UInt32                      inBusNumber,
+								  UInt32						  inNumberFrames,
+								  AudioBufferList            *ioData);
+            
+        };
+        
+    }
+}
+
+#endif

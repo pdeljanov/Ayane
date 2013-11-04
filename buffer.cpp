@@ -99,9 +99,9 @@ template<typename T>
 void TypedBuffer<T>::buildChannelMap( ChannelMap map, Channels channels, T* base, unsigned int stride )
 {
     /* m_bufs is an array of pointers. Each pointer points to an address within base. These addresses
-     * form the start address of the channel buffer. Channel pointers are stored in the canonical channel
+     * form the start addresses of the channel buffers. Channel pointers are stored in the canonical channel
      * ordering. If a channel is not used, m_bufs for that channel index is null. The first pointer in
-     * m_bufs *must* be base as ChannelMapper takes ownership of the memory.
+     * m_bufs *must* be base as ChannelMap takes ownership of the memory.
      */
     
     channels &= kChannelMask;
@@ -110,7 +110,7 @@ void TypedBuffer<T>::buildChannelMap( ChannelMap map, Channels channels, T* base
     map[0] = base;
     
     int i = 0;  // Channel we're testing.
-    int j = 0;  // Previous buffer we wrote to.
+    int j = 0;  // Previous buffer index set to an address other than null.
     
     while( channels )
     {
@@ -136,19 +136,19 @@ struct TypedBufferTraits
 
 template <>
 struct TypedBufferTraits<SampleInt16>
-{ static SampleFormat sampleFormat(){ return Int16; } };
+{ static SampleFormat sampleFormat(){ return kInt16; } };
 
 template <>
 struct TypedBufferTraits<SampleInt32>
-{ static SampleFormat sampleFormat(){ return Int32; } };
+{ static SampleFormat sampleFormat(){ return kInt32; } };
 
 template <>
 struct TypedBufferTraits<SampleFloat32>
-{ static SampleFormat sampleFormat(){ return Float32; } };
+{ static SampleFormat sampleFormat(){ return kFloat32; } };
 
 template <>
 struct TypedBufferTraits<SampleFloat64>
-{ static SampleFormat sampleFormat(){ return Float64; } };
+{ static SampleFormat sampleFormat(){ return kFloat64; } };
 
 template<typename T>
 SampleFormat TypedBuffer<T>::sampleFormat() const
@@ -483,16 +483,16 @@ TypedBuffer<T> &TypedBuffer<T>::operator<< (const Buffer& buffer )
 {
     switch(buffer.sampleFormat())
     {
-        case Int16:
+        case kInt16:
             write(static_cast<const Int16Buffer&>(buffer));
             break;
-        case Int32:
+        case kInt32:
             write(static_cast<const Int32Buffer&>(buffer));
             break;
-        case Float32:
+        case kFloat32:
             write(static_cast<const Float32Buffer&>(buffer));
             break;
-        case Float64:
+        case kFloat64:
             write(static_cast<const Float64Buffer&>(buffer));
             break;
         default:
@@ -508,16 +508,16 @@ TypedBuffer<T> &TypedBuffer<T>::operator>> ( Buffer& buffer )
 {
     switch(buffer.sampleFormat())
     {
-        case Int16:
+        case kInt16:
             read(static_cast<Int16Buffer&>(buffer));
             break;
-        case Int32:
+        case kInt32:
             read(static_cast<Int32Buffer&>(buffer));
             break;
-        case Float32:
+        case kFloat32:
             read(static_cast<Float32Buffer&>(buffer));
             break;
-        case Float64:
+        case kFloat64:
             read(static_cast<Float64Buffer&>(buffer));
             break;
         default:

@@ -8,16 +8,22 @@
 
 if( ${STARGAZER_HOST} MATCHES "mac" )
 
-	find_library(COREAUDIO_LIBRARY CoreAudio )
+	find_library(COREAUDIO_FRAMEWORK CoreAudio )
+	find_library(AUDIO_TOOLBOX_FRAMEWORK AudioToolbox )
+	find_library(AUDIO_UNIT_FRAMEWORK AudioUnit )
 
-	set( audio_host_LIBS ${COREAUDIO_LIBRARY} )
+	set( audio_host_LIBS 
+		${COREAUDIO_FRAMEWORK}
+		${AUDIO_TOOLBOX_FRAMEWORK}
+		${AUDIO_UNIT_FRAMEWORK}
+		)
 
 	set( audio_host_SRCS
-		host/mac/endpoint.cpp
+		host/mac/coreaudioendpoint.cpp
 		)
 	
 	set( audio_host_HDRS
-		host/endpoint.h
+		host/mac/coreaudioendpoint.h
 		)
 
 else()
@@ -30,6 +36,7 @@ set( audio_host_shared_SRCS
 	
 # Headers that are common to all hosts.
 set( audio_host_shared_HDRS
+	host/endpoint.h
 	)
 
 ## Interface ##
@@ -118,33 +125,35 @@ if( STARGAZER_IS_PLATFORM )
 			
 else()
 
-	add_library( stargazer_stdlib_audio-host STATIC
-				${audio_host_SRCS}
-				${audio_host_shared_SRCS}
-				${audio_host_HDRS}
-				${audio_host_shared_HDRS}
-				${audio_host_LIBS}
-				)
 
-	target_link_libraries( stargazer_stdlib_audio-host
-							${audio_host_LIBS}
-							)
-		
+	# Dynamic stdlib_audio library.
 	add_library( stargazer_stdlib_audio SHARED
 				${audio_SRCS} 
 				${audio_trusted_SRCS}
 				${audio_HDRS} 
 				${audio_trusted_HDRS}
+				
+				# Host portion of library.
+				${audio_host_SRCS}
+				${audio_host_shared_SRCS}
+				${audio_host_HDRS}
+				${audio_host_shared_HDRS}
+				
+				# Host libraries
+				${audio_host_LIBS}
 				)
-
+	
 	target_link_libraries( stargazer_stdlib_audio
-							stargazer_stdlib_audio-host 
+						 ${audio_host_LIBS}
 							)
+	
 
+	# Test App.
 	add_executable( stargazer_stdlib_audio-benchmark benchmark.cpp )
-	target_link_libraries( stargazer_stdlib_audio-benchmark
-		stargazer_stdlib_audio
-		)
+	
+	target_link_libraries(	stargazer_stdlib_audio-benchmark
+							stargazer_stdlib_audio
+							)
 
 	install( TARGETS stargazer_stdlib_audio
 			LIBRARY DESTINATION lib/stargazer
