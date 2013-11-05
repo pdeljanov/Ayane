@@ -1,4 +1,4 @@
-#include "abstractstage.h"
+#include "stage.h"
 
 #include <iostream>
 
@@ -424,6 +424,33 @@ bool Stage::Source::pull( std::shared_ptr<Buffer> &buffer )
     
 }
 
+
+bool Stage::Source::tryPull( std::shared_ptr<Buffer> &buffer ) {
+    
+    if( m_synchronicity == kAsynchronous ) {
+        
+        // Attempt to get the lock. If the lock can be obtained, return false.
+        std::unique_lock<std::mutex> lock(m_mutex, std::try_to_lock);
+        
+        if( !lock.owns_lock() || m_buffers.empty() ) {
+            return false;
+        }
+
+        // Return the popped buffer.
+        buffer.swap(m_buffers.front());
+        m_buffers.pop();
+        
+        return true;
+    }
+    else {
+        // tryPull makes no sense on synchronous sources because we can't
+        // control the types of pulls performed in the process function.
+        return false;
+    }
+    
+}
+
+
 void Stage::Source::reset() {
     // Clear the queue.
     std::queue<std::shared_ptr<Buffer>>().swap(m_buffers);
@@ -457,4 +484,20 @@ std::shared_ptr<Buffer> Stage::Sink::pull()
     }
     
     return buffer;
+}
+
+bool Stage::Sink::tryPull(std::shared_ptr<Buffer> &buffer) {
+    
+    // TODO: Test for a pull error.
+    if( !m_source->tryPull(buffer) ) {
+        return false;
+    }
+    
+    // If the buffer has a format negotiation flag, issue a reconfigure
+    // call which will allow the stage to adapt for the new format.
+    if( buffer->flags() & Buffer::kFormatNegotiation ) {
+        m_stage.reconfigureSink( *this );
+    }
+    
+    return true;
 }

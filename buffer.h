@@ -29,6 +29,8 @@ namespace Stargazer
     namespace Audio
     {
         
+        class RawBuffer;
+        
         class Buffer
         {
 
@@ -94,12 +96,20 @@ namespace Stargazer
              */
             Duration duration() const;
 
-            
             /** 
              *  Returns the maximum amount of frames the buffer may contain.
              */
             unsigned int frames() const;
             
+            /**
+             *  Returns the number of frames available to be read.
+             */
+            unsigned int available() const;
+            
+            /**
+             *  Returns the number of frames that have yet to be written.
+             */
+            unsigned int space() const;
             
             /**
              *  Returns the buffer format descriptor.
@@ -241,8 +251,10 @@ namespace Stargazer
              */
             
             virtual Buffer &operator<< ( const Buffer& ) = 0;
+            virtual Buffer &operator<< ( RawBuffer& ) = 0;
             
             virtual Buffer &operator>> ( Buffer& ) = 0;
+            virtual Buffer &operator>> ( RawBuffer& ) = 0;
             
             //virtual Buffer &operator* ( const Buffer& ) = 0;
             
@@ -256,6 +268,9 @@ namespace Stargazer
             
             // Buffer flags
             StreamFlags m_flags;
+            
+            unsigned int m_wr;
+            unsigned int m_rd;
         };
 
         
@@ -315,6 +330,7 @@ namespace Stargazer
             virtual TypedBuffer<T>& operator<< ( const MultiChannel7<SampleFloat64>& );
             
             virtual TypedBuffer<T> &operator<< ( const Buffer& );
+            virtual TypedBuffer<T> &operator<< ( RawBuffer& );
 
             
             template<typename InSampleType>
@@ -343,6 +359,8 @@ namespace Stargazer
             
             template<typename InSampleType>
             void write( const TypedBuffer<InSampleType> &buffer );
+
+            void write( RawBuffer &buffer );
 
             
             /* Readers */
@@ -387,7 +405,8 @@ namespace Stargazer
             virtual TypedBuffer<T>& operator>> ( MultiChannel7<SampleFloat64>& );
             
             virtual TypedBuffer<T>& operator>> ( Buffer& );
-            
+            virtual TypedBuffer<T>& operator>> ( RawBuffer& );
+
             
             template<typename OutSampleType>
             force_inline void read( Mono<OutSampleType> &frame );
@@ -416,13 +435,13 @@ namespace Stargazer
             template<typename OutSampleType>
             void read( TypedBuffer<OutSampleType> &buffer );
             
+            void read( RawBuffer &buffer );
             
         private:
             
-            typedef T* ChannelMap[11];
+            typedef T* ChannelMap[kMaximumChannels];
             
-            size_t m_wr;
-            size_t m_rd;
+
             ChannelMap m_ch = { nullptr };
             
             /**

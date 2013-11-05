@@ -75,6 +75,12 @@ namespace Stargazer {
                  *  buffer is pulled.
                  */
                 bool pull( std::shared_ptr<Buffer> &buffer );
+                
+                /**
+                 *  Attempts to pull a buffer from the source. This function 
+                 *  never blocks, but a buffer may not always be pulled.
+                 */
+                bool tryPull( std::shared_ptr<Buffer> &buffer );
 
                 /** 
                  *  Cancels any pending request on the source port. 
@@ -171,6 +177,13 @@ namespace Stargazer {
                  *  will issue a port-specific reconfigureSink() event.
                  */
                 std::shared_ptr<Buffer> pull();
+                
+                /**
+                 *  Attempts to pull a buffer from the linked source. This 
+                 *  function will never block, but it may not always return a 
+                 *  buffer.
+                 */
+                bool tryPull( std::shared_ptr<Buffer> &buffer );
                 
                 /**
                  *  Gets the scheduling mode.

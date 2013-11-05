@@ -11,6 +11,8 @@
 
 #include "coreaudioendpoint.h"
 
+#include "audio/rawbuffer.h"
+
 #include <iostream>
 
 using namespace Stargazer::Audio;
@@ -1282,36 +1284,7 @@ bool CoreAudioEndpoint::setAUOutputChannelLayout(AudioChannelLayout *channelLayo
 
 
 
-#define FREQ (1000.0f)
-#define SAMPLE_RATE (44100.0f)
-#define PERIOD (SAMPLE_RATE / FREQ)
 
-OSStatus CoreAudioEndpoint::render(AudioUnitRenderActionFlags *ioActionFlags,
-                                   const AudioTimeStamp	 *inTimeStamp,
-                                   UInt32 inBusNumber,
-                                   UInt32 inNumberFrames,
-                                   AudioBufferList *ioData)
-{
-    std::cout << "CoreAudioEndpoint::render: inNumberFrames="
-    << inNumberFrames << ", ioData->mNumberBuffers="
-    << ioData->mNumberBuffers << std::endl;
-    
-    // Output silence.
-    *ioActionFlags |= kAudioUnitRenderAction_OutputIsSilence;
-        
-    size_t byteCountToZero = inNumberFrames * sizeof(AudioUnitSampleType);
-    
-    for(UInt32 bufferIndex = 0;
-        bufferIndex < ioData->mNumberBuffers;
-        ++bufferIndex) {
-
-        memset(ioData->mBuffers[bufferIndex].mData, 0, byteCountToZero);
-        ioData->mBuffers[bufferIndex].mDataByteSize = (UInt32)byteCountToZero;
-    }
-
-
-    return noErr;
-}
 
 OSStatus CoreAudioEndpoint::renderNotify(AudioUnitRenderActionFlags *ioActionFlags,
                                          const AudioTimeStamp *inTimeStamp,
@@ -1330,6 +1303,38 @@ OSStatus CoreAudioEndpoint::renderNotify(AudioUnitRenderActionFlags *ioActionFla
     return noErr;
 }
 
+
+
+
+
+
+
+
+
+AudioBufferList * CoreAudioEndpoint::allocateABL(UInt32 channelsPerFrame,
+                                                 UInt32 bytesPerSample,
+                                                 bool interleaved,
+                                                 UInt32 capacityFrames)
+{
+    UInt32 bytesPerFrame = bytesPerSample * channelsPerFrame;
+    
+    AudioBufferList *abl = NULL;
+    
+    UInt32 numBuffers = interleaved ? 1 : channelsPerFrame;
+    UInt32 channelsPerBuffer = interleaved ? channelsPerFrame : 1;
+    
+    abl = static_cast<AudioBufferList *>(calloc(1, offsetof(AudioBufferList, mBuffers) + (sizeof(AudioBuffer) * numBuffers)));
+    
+    abl->mNumberBuffers = numBuffers;
+    
+    for(UInt32 bufferIndex = 0; bufferIndex < abl->mNumberBuffers; ++bufferIndex) {
+        abl->mBuffers[bufferIndex].mData = static_cast<void *>(calloc(capacityFrames, bytesPerFrame));
+        abl->mBuffers[bufferIndex].mDataByteSize = capacityFrames * bytesPerFrame;
+        abl->mBuffers[bufferIndex].mNumberChannels = channelsPerBuffer;
+    }
+    
+    return abl;
+}
 
 
 
@@ -1381,17 +1386,7 @@ bool CoreAudioEndpoint::stoppedPlayback() {
 }
 
 void CoreAudioEndpoint::process(){
-    std::cout << "CoreAudioEndpoint::process"
-    << std::endl;
-    
-    /*
-     *  Get a buffer. And convert it to the canonical Core Audio format.
-     *  Planar, -1 to 1 normalized float32.
-     */
-    
-    std::shared_ptr<Buffer> buffer = input()->pull();
-
-    
+    std::cout << "CoreAudioEndpoint::process" << std::endl;
 }
 
 bool CoreAudioEndpoint::reconfigureSink( const Sink &sink ){
@@ -1427,7 +1422,10 @@ bool CoreAudioEndpoint::reconfigureSink( const Sink &sink ){
         
         return false;
     }
+    
+    // Update raw buffer.
 
+    
     // If the audio output was not running, start it now.
     if( !wasRunning ) {
         startOutput();
@@ -1435,3 +1433,66 @@ bool CoreAudioEndpoint::reconfigureSink( const Sink &sink ){
     
     return true;
 }
+
+
+
+
+
+
+
+
+OSStatus CoreAudioEndpoint::render(AudioUnitRenderActionFlags *ioActionFlags,
+                                   const AudioTimeStamp	 *inTimeStamp,
+                                   UInt32 inBusNumber,
+                                   UInt32 inNumberFrames,
+                                   AudioBufferList *ioData)
+{
+    // Update the RawBuffer wrapper to point to the new AudioBufferList buffers.
+    mAudioBufferListWrapper.mBuffers[0].mBuffer = ioData->mBuffers[0].mData;
+    mAudioBufferListWrapper.mBuffers[1].mBuffer = ioData->mBuffers[1].mData;
+    mAudioBufferListWrapper.mFrames = inNumberFrames;
+    mAudioBufferListWrapper.reset();
+    
+    // Copy any left over data from the current buffer.
+    if( mCurrentBuffer && (mCurrentBuffer->available() > 0) ) {
+        *mCurrentBuffer >> mAudioBufferListWrapper;
+    }
+
+    while( mAudioBufferListWrapper.space() > 0 ) {
+        
+        // Release the current buffer if it hasn't been released.
+        if( mCurrentBuffer ) {
+            mCurrentBuffer.reset();
+        }
+        
+        // Try to get a new buffer.
+        if( input()->tryPull(mCurrentBuffer) ) {
+            *mCurrentBuffer >> mAudioBufferListWrapper;
+        }
+        else {
+
+            // If absolutely nothing was written, signal we're outputting silence.
+            if( mAudioBufferListWrapper.mReadIndex == 0 ) {
+                *ioActionFlags |= kAudioUnitRenderAction_OutputIsSilence;
+            }
+            
+            // Fill the remaining space in each buffer with 0.
+            size_t byteCountToZero = mAudioBufferListWrapper.space() * sizeof(AudioUnitSampleType);
+            
+            for(UInt32 bufferIndex = 0;
+                bufferIndex < ioData->mNumberBuffers;
+                ++bufferIndex) {
+                
+                AudioUnitSampleType *bufferStart = (AudioUnitSampleType*)ioData->mBuffers[bufferIndex].mData;
+                memset(bufferStart + mAudioBufferListWrapper.mWriteIndex, 0, byteCountToZero);
+            }
+            
+            // Break out here because space() won't be updated.
+            break;
+        }
+    }
+    
+    return noErr;
+}
+
+

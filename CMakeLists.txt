@@ -62,7 +62,6 @@ set( audio_trusted_HDRS
 # Sources common to both trusted and untrusted builds of audio.
 set( audio_SRCS
 	abstractclock.cpp
-	abstractstage.cpp
 	buffer.cpp
 	bufferframes.cpp
 	bufferformat.cpp
@@ -78,12 +77,12 @@ set( audio_SRCS
 	messagebus.cpp
 	pipeline.cpp
 	rawbuffer.cpp
+	stage.cpp
   	)
 
 # Headers common to both trusted and untrusted builds of audio.
 set( audio_HDRS
 	abstractclock.h
-	abstractstage.h
 	buffer.h
 	bufferframes.h
 	bufferformat.h
@@ -99,6 +98,7 @@ set( audio_HDRS
 	messagebus.h
 	pipeline.h
 	rawbuffer.h
+	stage.h
 	)
 
 

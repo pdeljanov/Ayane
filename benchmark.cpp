@@ -11,8 +11,9 @@
 #include "clockobserver.h"
 #include "buffer.h"
 #include "refcountedpool.h"
-#include "abstractstage.h"
 
+#include <audio/rawbuffer.h>
+#include <audio/stage.h>
 #include <audio/host/mac/coreaudioendpoint.h>
 
 #include <vector>
@@ -344,7 +345,7 @@ public:
 
 int main(int argc, const char *argv[] )
 {
-
+/*
     //* Will be done by pipeline.
     std::unique_ptr<ClockProvider> cp( new ClockProvider() );
     Clock *sinkClock = new Clock();
@@ -395,9 +396,40 @@ int main(int argc, const char *argv[] )
     // Unlink.
     Stage::unlink( src->output(), dsp->input() );
     Stage::unlink( dsp->output(), sink->input() );    
+    */
+    
+    
+    SampleInt16 *fr = new SampleInt16[512];
+    SampleInt16 *fl = new SampleInt16[512];
+    SampleInt16 *lfe = new SampleInt16[512];
+
+    memset(fr, 0xA0, sizeof(SampleInt16)*512);
+    memset(fl, 0xB0, sizeof(SampleInt16)*512);
+    memset(lfe, 0xC0, sizeof(SampleInt16)*512);
+
+    RawBuffer *rb = new RawBuffer(512, 2, kInt16, true);
+    rb->mBuffers[0].mBuffer = fr;
+    rb->mBuffers[0].mChannel = kFrontRight;
+    
+    rb->mBuffers[0].mBuffer = fl;
+    rb->mBuffers[0].mChannel = kFrontLeft;
+    
+    rb->mBuffers[0].mBuffer = lfe;
+    rb->mBuffers[0].mChannel = kLowFrequencyOne;
     
 
+    BufferFormat format( kStereo21, 512 );
+    BufferLength length( (unsigned int)512 );
     
+    Int16Buffer *b = new Int16Buffer(format, length);
+    
+    *b << *rb;
+        
+    
+    while(true){
+        char c;
+        std::cin >> c;
+    }
 
     
 }

@@ -65,6 +65,13 @@ namespace Stargazer
             /*kFrontRightHeight    = 1<<14*/
         };
         
+        const int kMaximumChannels = 11;
+        
+        // TODO: Put in utility class.
+        static int ChannelToCanonicalIndex( Channel name ) {
+            return __builtin_ctz(name);
+        }
+        
         const Channels kChannelMask = 0x7FF;
         
         const Channel kCanonicalChannels[] =

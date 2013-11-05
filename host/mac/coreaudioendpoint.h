@@ -12,7 +12,8 @@
 #include <CoreAudio/CoreAudioTypes.h>
 #include <AudioToolbox/AudioToolbox.h>
 
-#include <audio/abstractstage.h>
+#include "audio/rawbuffer.h"
+#include "audio/stage.h"
 
 #include <vector>
 #include <memory>
@@ -96,6 +97,10 @@ namespace Stargazer {
             
 			bool setAUOutputChannelLayout(AudioChannelLayout *channelLayout);
             
+            AudioBufferList *allocateABL(UInt32 channelsPerFrame,
+                                         UInt32 bytesPerSample,
+                                         bool interleaved,
+                                         UInt32 capacityFrames);
             
             
             // Audio Unit graph
@@ -111,6 +116,13 @@ namespace Stargazer {
             std::unique_ptr<AudioChannelLayout>	mAUChannelLayout;
             
             UInt32 mMaxFramesPerSlice;
+            
+    
+            
+            RawBuffer mAudioBufferListWrapper;
+            std::shared_ptr<Buffer> mCurrentBuffer;
+            
+            
             
         public:
             

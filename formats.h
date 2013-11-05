@@ -161,9 +161,47 @@ namespace Stargazer
             template< typename InSampleType, typename OutSampleType >
             static void convertMany( InSampleType *src, OutSampleType *dest, int count )
             {
-                for( int i = 0; i < count; ++i )
+                for( int i = 0; i < count; ++i ) {
                     dest[i] = SampleFormats::convertSample<InSampleType, OutSampleType>(src[i]);
+                }
             }
+            
+            /**
+             *  Converts many samples of InSampleType to OutSampleType with a
+             *  custom source buffer stride.
+             */
+            template< typename InSampleType, typename OutSampleType >
+            static void convertMany(InSampleType  *src, int srcStride,
+                                    OutSampleType *dest, int count )
+            {
+                OutSampleType *end = dest + count;
+                
+                while( dest != end ) {
+                    *dest = SampleFormats::convertSample<InSampleType, OutSampleType>(*src);
+                    src += srcStride;
+                    ++dest;
+                }
+            }
+
+            /**
+             *  Converts many samples of InSampleType to OutSampleType with a 
+             *  custom destination buffer stride.
+             */
+            template< typename InSampleType, typename OutSampleType >
+            static void convertMany(InSampleType *src, OutSampleType *dest,
+                                    int destStride,
+                                    int count )
+            {
+                InSampleType *end = src + count;
+                
+                while( src != end ) {
+                    *dest = SampleFormats::convertSample<InSampleType, OutSampleType>(*src);
+                    ++src;
+                    dest += destStride;
+                }
+            }
+
+            
             
         private:
         

@@ -6,6 +6,7 @@
  */
 
 #include "buffer.h"
+#include "rawbuffer.h"
 
 #include <core/alignedmemory.h>
 
@@ -15,7 +16,8 @@ Buffer::Buffer ( const BufferFormat &format, const BufferLength &length ) :
     m_format(format),
     m_length(length),
     m_timestamp(0),
-    m_flags(kNone)
+    m_flags(kNone),
+    m_wr(0), m_rd(0)
 {
 
 }
@@ -66,11 +68,19 @@ unsigned int Buffer::frames() const
     return m_length.frames ( m_format.m_sampleRate );
 }
 
+unsigned int Buffer::available() const {
+    // Frames that can be read!
+    return m_wr - m_rd;
+}
+
+unsigned int Buffer::space() const {
+    // Frames that can be written!
+    return frames() - m_wr;
+}
 
 template<typename T>
 TypedBuffer<T>::TypedBuffer( const BufferFormat &format, const BufferLength &length ) :
-    Buffer( format, length ),
-    m_wr(0), m_rd(0)
+    Buffer( format, length )
 {
     // Calculate the number of frames in the buffer.
     unsigned int frames = length.frames ( format.sampleRate() );
@@ -315,6 +325,59 @@ void TypedBuffer<T>::read(TypedBuffer<OutSampleType> &buffer)
     
 }
 
+template< typename T >
+void TypedBuffer<T>::read(RawBuffer &buffer) {
+    
+    unsigned int length = std::min(buffer.space(), m_wr - m_rd);
+    
+    
+    // Loop through each channel available in the raw buffer.
+    for( int i = 0; i < buffer.mChannelCount; ++i ){
+        
+        // Skip the channel if the buffer doesn't support it.
+        if( !(m_format.channels() & buffer.mBuffers[i].mChannel) ) {
+            continue;
+        }
+        
+        T *in = m_ch[ChannelToCanonicalIndex(buffer.mBuffers[i].mChannel)] + m_rd;
+        
+        switch (buffer.mFormat) {
+            case kInt16: {
+                SampleFormats::convertMany<T, SampleInt16>(in,
+                                                           buffer.writeAs<SampleInt16>(i),
+                                                           buffer.mStride,
+                                                           length);
+                continue;
+            }
+            case kInt32: {
+                SampleFormats::convertMany<T, SampleInt32>(in,
+                                                           buffer.writeAs<SampleInt32>(i),
+                                                           buffer.mStride,
+                                                           length);
+                continue;
+            }
+            case kFloat32: {
+                SampleFormats::convertMany<T, SampleFloat32>(in,
+                                                             buffer.writeAs<SampleFloat32>(i),
+                                                             buffer.mStride,
+                                                             length);
+                continue;
+            }
+            case kFloat64: {
+                SampleFormats::convertMany<T, SampleFloat64>(in,
+                                                             buffer.writeAs<SampleFloat64>(i),
+                                                             buffer.mStride,
+                                                             length);
+                continue;
+            }
+            default:
+                continue;
+        }
+    }
+    
+    buffer.mWriteIndex += length;
+    m_rd += length;
+}
 
 /* Write(...) Functions */
 
@@ -474,8 +537,71 @@ void TypedBuffer<T>::write(const TypedBuffer<InSampleType> &buffer)
     
 }
 
+template< typename T >
+void TypedBuffer<T>::write( RawBuffer &buffer ) {
+    
+    unsigned int length = std::min(buffer.available(), m_length.frames() - m_wr);
+    
+    // Loop through each channel available in the raw buffer.
+    for( int i = 0; i < buffer.mChannelCount; ++i ){
+        
+        // Skip the channel if the buffer doesn't support it.
+        if( !(m_format.channels() & buffer.mBuffers[i].mChannel) ) {
+            continue;
+        }
+        
+        T *out = m_ch[ChannelToCanonicalIndex(buffer.mBuffers[i].mChannel)] + m_wr;
+        
+        switch (buffer.mFormat) {
+            case kInt16: {
+                SampleFormats::convertMany<SampleInt16, T>(buffer.readAs<SampleInt16>(i),
+                                                           buffer.mStride,
+                                                           out, length);
+                continue;
+            }
+            case kInt32: {
+                SampleFormats::convertMany<SampleInt32, T>(buffer.readAs<SampleInt32>(i),
+                                                           buffer.mStride,
+                                                           out, length);
+                continue;
+            }
+            case kFloat32: {
+                SampleFormats::convertMany<SampleFloat32, T>(buffer.readAs<SampleFloat32>(i),
+                                                             buffer.mStride,
+                                                             out, length);
+                continue;
+            }
+            case kFloat64: {
+                SampleFormats::convertMany<SampleFloat64, T>(buffer.readAs<SampleFloat64>(i),
+                                                             buffer.mStride,
+                                                             out, length);
+                continue;
+            }
+            default:
+                continue;
+        }
+    }
+    
+    buffer.mReadIndex += length;
+    m_wr += length;
+}
+
+
 
 /* Shift-Operators */
+
+
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator<<(RawBuffer &buffer) {
+    write(buffer);
+    return (*this);
+}
+
+template<typename T>
+TypedBuffer<T> &TypedBuffer<T>::operator>>(RawBuffer &buffer) {
+    read(buffer);
+    return (*this);
+}
 
 // A wild buffer appears!
 template<typename T>

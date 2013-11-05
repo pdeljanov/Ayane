@@ -3,129 +3,130 @@
 
 #include <cstddef>
 
+#include <vector>
+
 #include "formats.h"
+#include "channels.h"
 
 namespace Stargazer
 {
     namespace Audio
     {
-        
 
-    
-        /** Wraps a memory buffer containing audio in a semi-arbitrary data format.
-         *
-         * RawAudioBuffer wraps an arbitrary memory buffer containing audio data. It stores
-         * information such as the data format and the size of the buffer. The raw data may
-         * be accessed using the overloaded shift operators.
-         *
-         * \note In debug mode, bounds checking is applied to all operations that modify
-         *       the underlying buffer.
-         **/
+        class Buffer;
+
         class RawBuffer
         {
-            friend class Buffer;
+            template<typename T>
+            friend class TypedBuffer;
             
         public:
             
-            RawBuffer ( uint8_t *buffer, size_t length, SampleFormat format ) :
-                m_buffer( buffer ),
-                m_format( format ),
-                m_stride( SampleFormats::about(format).stride ),
-                m_end( buffer + length ),
-                m_readPointer( buffer ),
-                m_writePointer( buffer )
-            {
-                // Nothing to do here. :)
-            }
+            typedef struct {
+                
+                /** Pointer to the buffer. */
+                void *mBuffer;
+                
+                /** Buffer channel assignment. */
+                Channel mChannel;
+                
+            } BufferDescriptor;
             
-            /** Gets the length of the buffer.
-             *
-             * \returns The length of the buffer in samples.
-             **/
-            size_t length() const
-            {
-                return (m_end - m_buffer);
-            }
-            
-            /** Gets the number of samples consumed.
-             *
-             * \returns The number of samples consumed in the buffer.
-             **/
-            size_t consumed() const
-            {
-                return static_cast<size_t>(m_readPointer - m_buffer) / m_stride;
-            }
-            
-            /** Gets the number of samples remaining in the buffer
-             *
-             * \returns The number of samples remaining in the buffer
-             **/
-            size_t remaining() const
-            {
-                return length() - consumed();
-            }
-            
-            /** Check whether the audio buffer is nil.
-             *
-             * \returns True is the buffer is a null pointer, or the length is zero.
-             **/
-            bool isNil() const
-            {
-                return ( (m_buffer == nullptr) || (length() == 0) );
-            }
-            
-            /** Gets the format of the audio samples stored in the buffer.
-             *
-             * \returns Returns the sample format of the underlying buffer.
-             **/
-            SampleFormat sampleFormat() const
-            {
-                return m_format;
-            }
 
-            
-            template< typename T >
-            inline RawBuffer& operator << ( const T& value )
-            {
-                
-#if defined(DEBUG)
-                if( m_writePointer == m_end )
-                    throw std::exception();
-#endif
-                    
-                *(T*)m_writePointer = value;
-                m_writePointer += m_stride;
-                return *this;
+            RawBuffer(uint32_t frames, uint32_t channels, SampleFormat format,
+                      bool planar);
+
+            /**
+             *  Get the number of frames available to be read.
+             */
+            unsigned int available() const {
+                return mWriteIndex - mReadIndex;
             }
             
-            
-            template< typename T >
-            inline RawBuffer& operator >> ( T& value )
-            {
-                
-#if defined(DEUBG)
-                if( m_readPointer == m_end )
-                    throw std::exception();
-#endif
-                    
-                value = *(T*)m_readPointer;
-                m_readPointer += m_stride;
-                return *this;
+            /**
+             *  Get the number of frames not written.
+             */
+            unsigned int space() const {
+                return mFrames - mWriteIndex;
             }
             
+            /**
+             *  Resets the read and write pointers.
+             */
+            void reset() {
+                mReadIndex = 0;
+                mWriteIndex = 0;
+            }
+            
+            /**
+             *  Returns a pointer to be used for reading from the raw buffer.
+             */
+            template<typename OutSampleType>
+            OutSampleType *readAs( unsigned int channel ){
+                
+                OutSampleType *base = nullptr;
+                
+                if(mDataLayoutIsPlanar) {
+                    base = reinterpret_cast<OutSampleType*>(mBuffers[channel].mBuffer);
+                    base += mReadIndex;
+                }
+                else {
+                    base = reinterpret_cast<OutSampleType*>(mBuffers[0].mBuffer) + channel;
+                    base += (mReadIndex * mStride);
+                }
+                
+                return base;
+            }
+            
+            /**
+             *  Returns a pointer to be used for writing from the raw buffer.
+             */
+            template<typename OutSampleType>
+            OutSampleType *writeAs( unsigned int channel ){
+                
+                OutSampleType *base = nullptr;
+                
+                if(mDataLayoutIsPlanar) {
+                    base = reinterpret_cast<OutSampleType*>(mBuffers[channel].mBuffer);
+                    base += mWriteIndex;
+                }
+                else {
+                    base = reinterpret_cast<OutSampleType*>(mBuffers[0].mBuffer) + channel;
+                    base += (mWriteIndex * mStride);
+                }
+                
+                return base;
+            }
+            
+            RawBuffer& operator>> (Buffer& rhs);
+
+            RawBuffer& operator<< (Buffer& rhs);
             
             
-        private:
             
-            const uint8_t *m_buffer;
-            const SampleFormat m_format;
-            const unsigned int m_stride;
-            const uint8_t *m_end;
+            /** The sample format of the raw buffer. */
+            SampleFormat mFormat;
             
-            uint8_t *m_readPointer;
-            uint8_t *m_writePointer;
+            /** True if the data layout is planar, false otherwise. */
+            bool mDataLayoutIsPlanar;
             
+            /** The number of frames the raw buffer can store. */
+            unsigned int mFrames;
             
+            /** The number of frames read. */
+            unsigned int mReadIndex;
+            
+            /** The number of frames written. */
+            unsigned int mWriteIndex;
+            
+            /** The number of channels. */
+            uint32_t mChannelCount;
+            
+            /** The stride of the raw data. */
+            uint32_t mStride;
+            
+            /** Buffer descriptors. */
+            BufferDescriptor mBuffers[kMaximumChannels];
         };
         
     }
