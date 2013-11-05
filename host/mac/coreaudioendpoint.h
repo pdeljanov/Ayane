@@ -58,7 +58,8 @@ namespace Stargazer {
             virtual bool beginPlayback();
             virtual bool stoppedPlayback();
             virtual void process();
-            virtual bool reconfigureSink( const Sink &sink );
+            virtual bool reconfigureSink(const Sink &sink,
+                                         const BufferFormat &format );
             
             
             
@@ -118,9 +119,11 @@ namespace Stargazer {
             UInt32 mMaxFramesPerSlice;
             
     
+            BufferQueue mBuffers;
             
-            RawBuffer mAudioBufferListWrapper;
-            std::shared_ptr<Buffer> mCurrentBuffer;
+            std::unique_ptr<RawBuffer> mAudioBufferListWrapper;
+            std::unique_ptr<Buffer> mCurrentBuffer;
+            
             
             
             

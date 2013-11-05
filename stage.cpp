@@ -315,6 +315,7 @@ void Stage::unlink( Source *source, Sink *sink )
 
 Stage::Source::Source( Stage &stage ) :
     m_stage(stage),
+    m_buffers(2),
     m_cancelled(false),
     m_synchronicity(kSynchronous)
 {
@@ -339,32 +340,16 @@ bool Stage::Source::checkFormatSupport(const BufferFormat &format) const
     return false;
 }
 
-void Stage::Source::push(std::shared_ptr<Buffer> &buffer)
+void Stage::Source::push(std::unique_ptr<Buffer> &buffer)
 {
-    switch(m_synchronicity) {
-        case kAsynchronous: {
-            
-            std::lock_guard<std::mutex> lock(m_mutex);
-
-            // Insert null shared_ptr into the queue and then swap in buffer to
-            // prevent copy overhead.
-            m_buffers.emplace();
-            m_buffers.back().swap(buffer);
-
-            // Notify any waiting pulls.
-            m_cv.notify_one();
-            
-            break;
-        }
-        case kSynchronous: {
-            
-            // Insert null shared_ptr into the queue and then swap in buffer to
-            // prevent copy overhead.
-            m_buffers.emplace();
-            m_buffers.back().swap(buffer);
-            
-            break;
-        }
+    if( !m_buffers.push(buffer) ) {
+        // Buffer couldn't be inserted due to the queue being full. This should
+        // not happen unless the upstream sink isn't working properly.
+        std::cout << "Stage::Source::push: Failed to push buffer." << std::endl;
+    }
+    
+    if( m_synchronicity == kAsynchronous ) {
+        m_cv.notify_one();
     }
 }
 
@@ -380,11 +365,10 @@ void Stage::Source::cancel()
         
         // Notify any waiting pulls that it can cancel its wait.
         m_cv.notify_one();
-        
     }
 }
 
-bool Stage::Source::pull( std::shared_ptr<Buffer> &buffer )
+bool Stage::Source::pull( std::unique_ptr<Buffer> *buffer )
 {
     switch(m_synchronicity) {
         case kAsynchronous: {
@@ -402,10 +386,7 @@ bool Stage::Source::pull( std::shared_ptr<Buffer> &buffer )
             }
             
             // Return the popped buffer.
-            buffer.swap(m_buffers.front());
-            m_buffers.pop();
-            
-            return true;
+            return m_buffers.pop(buffer);
         }
         case kSynchronous: {
 
@@ -413,47 +394,30 @@ bool Stage::Source::pull( std::shared_ptr<Buffer> &buffer )
             if( m_buffers.empty() ) {
                 m_stage.process();
             }
-            
-            // Return the popped buffer.
-            buffer.swap(m_buffers.front());
-            m_buffers.pop();
-            
-            return true;
+
+            // Return popped buffer.
+            return m_buffers.pop(buffer);
         }
     }
     
 }
 
 
-bool Stage::Source::tryPull( std::shared_ptr<Buffer> &buffer ) {
+bool Stage::Source::tryPull( std::unique_ptr<Buffer> *buffer ) {
     
     if( m_synchronicity == kAsynchronous ) {
-        
-        // Attempt to get the lock. If the lock can be obtained, return false.
-        std::unique_lock<std::mutex> lock(m_mutex, std::try_to_lock);
-        
-        if( !lock.owns_lock() || m_buffers.empty() ) {
-            return false;
-        }
+        return m_buffers.pop(buffer);
+    }
 
-        // Return the popped buffer.
-        buffer.swap(m_buffers.front());
-        m_buffers.pop();
-        
-        return true;
-    }
-    else {
-        // tryPull makes no sense on synchronous sources because we can't
-        // control the types of pulls performed in the process function.
-        return false;
-    }
-    
+    // tryPull makes no sense on synchronous sources because we can't
+    // control the types of pulls performed in the process function.
+    return false;
 }
 
 
 void Stage::Source::reset() {
     // Clear the queue.
-    std::queue<std::shared_ptr<Buffer>>().swap(m_buffers);
+    m_buffers.clear();
 }
 
 /* Stage::Sink */
@@ -470,33 +434,35 @@ bool Stage::Sink::checkFormatSupport( const BufferFormat &format ) const
     return true;
 }
 
-std::shared_ptr<Buffer> Stage::Sink::pull()
+bool Stage::Sink::pull( std::unique_ptr<Buffer> *outBuffer )
 {
-    std::shared_ptr<Buffer> buffer;
-    
-    // TODO: Test for a pull error.
-    m_source->pull(buffer);
-    
+    if( !m_source->pull(outBuffer) ) {
+        return false;
+    }
+
     // If the buffer has a format negotiation flag, issue a reconfigure
     // call which will allow the stage to adapt for the new format.
-    if( buffer->flags() & Buffer::kFormatNegotiation ) {
-        m_stage.reconfigureSink( *this );
+    if( (*outBuffer)->flags() & Buffer::kFormatNegotiation ) {
+        if( !m_stage.reconfigureSink(*this, (*outBuffer)->format()) ){
+            return false;
+        }
     }
     
-    return buffer;
+    return true;
 }
 
-bool Stage::Sink::tryPull(std::shared_ptr<Buffer> &buffer) {
+bool Stage::Sink::tryPull(std::unique_ptr<Buffer> *outBuffer ) {
     
-    // TODO: Test for a pull error.
-    if( !m_source->tryPull(buffer) ) {
+    if( !m_source->tryPull(outBuffer) ) {
         return false;
     }
     
     // If the buffer has a format negotiation flag, issue a reconfigure
     // call which will allow the stage to adapt for the new format.
-    if( buffer->flags() & Buffer::kFormatNegotiation ) {
-        m_stage.reconfigureSink( *this );
+    if( (*outBuffer)->flags() & Buffer::kFormatNegotiation ) {
+        if( !m_stage.reconfigureSink(*this, (*outBuffer)->format()) ){
+            return false;
+        }
     }
     
     return true;

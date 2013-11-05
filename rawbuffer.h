@@ -31,7 +31,6 @@ namespace Stargazer
                 Channel mChannel;
                 
             } BufferDescriptor;
-            
 
             RawBuffer(uint32_t frames, uint32_t channels, SampleFormat format,
                       bool planar);

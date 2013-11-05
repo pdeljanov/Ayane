@@ -1,7 +1,7 @@
 #ifndef STARGAZER_STDLIB_AUDIO_ABSTRACTSTAGE_H_
 #define STARGAZER_STDLIB_AUDIO_ABSTRACTSTAGE_H_
 
-#include "buffer.h"
+#include "bufferqueue.h"
 #include "clock.h"
 
 #include <memory>
@@ -68,19 +68,19 @@ namespace Stargazer {
                  *  Attempts to push buffer to the source. If the source buffer
                  *  queue is full, this function will block.
                  */
-                void push( std::shared_ptr<Buffer> &buffer );
+                void push( std::unique_ptr<Buffer> &buffer );
                 
                 /**
                  *  Pulls a buffer from the source. This function blocks until a
                  *  buffer is pulled.
                  */
-                bool pull( std::shared_ptr<Buffer> &buffer );
+                bool pull( std::unique_ptr<Buffer> *buffer );
                 
                 /**
                  *  Attempts to pull a buffer from the source. This function 
                  *  never blocks, but a buffer may not always be pulled.
                  */
-                bool tryPull( std::shared_ptr<Buffer> &buffer );
+                bool tryPull( std::unique_ptr<Buffer> *buffer );
 
                 /** 
                  *  Cancels any pending request on the source port. 
@@ -109,8 +109,7 @@ namespace Stargazer {
                 
                 Stage &m_stage;
                 
-                // Queue of processed buffers.
-                std::queue<std::shared_ptr<Buffer>> m_buffers;
+                BufferQueue m_buffers;
                 
                 // Mutex, and condition variables to implement blocking.
                 std::mutex m_mutex;
@@ -120,7 +119,6 @@ namespace Stargazer {
                 // Synchronicity operating mode.
                 SynchronicityMode m_synchronicity;
 
-                
                 Sink *m_sink;
             };
             
@@ -176,15 +174,15 @@ namespace Stargazer {
                  *  may be a different format between successive calls, but the sink
                  *  will issue a port-specific reconfigureSink() event.
                  */
-                std::shared_ptr<Buffer> pull();
+                bool pull( std::unique_ptr<Buffer> *outBuffer );
                 
                 /**
                  *  Attempts to pull a buffer from the linked source. This 
                  *  function will never block, but it may not always return a 
                  *  buffer.
                  */
-                bool tryPull( std::shared_ptr<Buffer> &buffer );
-                
+                bool tryPull( std::unique_ptr<Buffer> *outBuffer );
+
                 /**
                  *  Gets the scheduling mode.
                  */
@@ -335,7 +333,8 @@ namespace Stargazer {
              *  to the caller.
              *
              */
-            virtual bool reconfigureSink( const Sink &sink ) = 0;
+            virtual bool reconfigureSink(const Sink &sink,
+                                         const BufferFormat &format ) = 0;
             
 
             /**

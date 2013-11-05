@@ -56,7 +56,7 @@ namespace {
 
 
 CoreAudioEndpoint::CoreAudioEndpoint() : Stage(),
-    mAUGraph(nullptr), mAUOutput(-1), mAUChannelLayout(nullptr)
+    mAUGraph(nullptr), mAUOutput(-1), mAUChannelLayout(nullptr), mBuffers(2)
 {
     
     /*
@@ -897,41 +897,7 @@ bool CoreAudioEndpoint::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID
 
 bool CoreAudioEndpoint::setAUGraphSampleRateAndChannelLayout(Float64 sampleRate, UInt32 channelsPerFrame) {
     
-    // ========================================
-	// If the graph is running, stop it
-	Boolean graphIsRunning = FALSE;
-	OSStatus result = AUGraphIsRunning(mAUGraph, &graphIsRunning);
-    
-	if(result != noErr) {
-		return false;
-	}
-	
-	if(graphIsRunning) {
-        
-		result = AUGraphStop(mAUGraph);
-        
-		if(result != noErr) {
-			return false;
-		}
-	}
-	
-	// ========================================
-	// If the graph is initialized, uninitialize it
-	Boolean graphIsInitialized = FALSE;
-	result = AUGraphIsInitialized(mAUGraph, &graphIsInitialized);
-    
-	if(result != noErr) {
-		return false;
-	}
-	
-	if(graphIsInitialized) {
-        
-		result = AUGraphUninitialize(mAUGraph);
-        
-		if(result != noErr) {
-			return false;
-		}
-	}
+	OSStatus result;
     
 	// ========================================
 	// Save the interaction information and then clear all the connections
@@ -1051,26 +1017,6 @@ bool CoreAudioEndpoint::setAUGraphSampleRateAndChannelLayout(Float64 sampleRate,
                                       &newMaxFrames,
                                       sizeof(newMaxFrames)))
         {
-			return false;
-		}
-	}
-    
-	// If the graph was initialized, reinitialize it
-	if(graphIsInitialized) {
-        
-		result = AUGraphInitialize(mAUGraph);
-        
-		if(result != noErr) {
-			return false;
-		}
-	}
-    
-	// If the graph was running, restart it
-	if(graphIsRunning) {
-        
-		result = AUGraphStart(mAUGraph);
-        
-		if(result != noErr) {
 			return false;
 		}
 	}
@@ -1295,6 +1241,8 @@ OSStatus CoreAudioEndpoint::renderNotify(AudioUnitRenderActionFlags *ioActionFla
     
     if( *ioActionFlags & kAudioUnitRenderAction_PreRender) {
         
+        // Handle buffer negotation here.
+        
 	}
 	else if( *ioActionFlags & kAudioUnitRenderAction_PostRender ) {
 
@@ -1373,6 +1321,8 @@ bool CoreAudioEndpoint::beginPlayback() {
     
     // Don't actually start the device till a buffer is received.
     
+    // Kick off the clock.
+    
     return true;
 }
 
@@ -1387,15 +1337,63 @@ bool CoreAudioEndpoint::stoppedPlayback() {
 
 void CoreAudioEndpoint::process(){
     std::cout << "CoreAudioEndpoint::process" << std::endl;
+    
+    std::unique_ptr<Buffer> buffer;
+    
+    // May kick off a sink reconfiguration.
+    if(input()->pull(&buffer)) {
+        
+        // Pass ownership of buffer to the queue.
+        mBuffers.push(buffer);
+        
+    }
+    else {
+        std::cout << "CoreAudioEndpoint::process: Glitch." << std::endl;
+    }
+    
 }
 
-bool CoreAudioEndpoint::reconfigureSink( const Sink &sink ){
+bool CoreAudioEndpoint::reconfigureSink(const Sink &sink,
+                                        const BufferFormat &format){
+    
     std::cout << "CoreAudioEndpoint::reconfigureSink" << std::endl;
     
-    // Grab the state of the audio output.
-    bool wasRunning = isOutputRunning();
+    /* Stop and unitialiaze the AUGraph. */
+	Boolean graphIsRunning = FALSE;
+	OSStatus result = AUGraphIsRunning(mAUGraph, &graphIsRunning);
     
-    if( !setAUGraphSampleRateAndChannelLayout(44100.0, 2) ) {
+	if(result != noErr) {
+		return false;
+	}
+	
+	if(graphIsRunning) {
+        
+		result = AUGraphStop(mAUGraph);
+        
+		if(result != noErr) {
+			return false;
+		}
+	}
+
+	Boolean graphIsInitialized = FALSE;
+	result = AUGraphIsInitialized(mAUGraph, &graphIsInitialized);
+    
+	if(result != noErr) {
+		return false;
+	}
+	
+	if(graphIsInitialized) {
+        
+		result = AUGraphUninitialize(mAUGraph);
+        
+		if(result != noErr) {
+			return false;
+		}
+	}
+    
+    /* Reconfigure the graph. */
+    if(!setAUGraphSampleRateAndChannelLayout(format.sampleRate(),
+                                             format.channelCount())) {
         
         std::cout << "CoreAudioEndpoint::reconfigureSink: Setting the sample "
             "rate and number of channels failed." << std::endl;
@@ -1423,14 +1421,29 @@ bool CoreAudioEndpoint::reconfigureSink( const Sink &sink ){
         return false;
     }
     
-    // Update raw buffer.
-
+    /* Update the raw buffer */
+    mAudioBufferListWrapper.reset(new RawBuffer(mMaxFramesPerSlice,
+                                                format.channelCount(),
+                                                kFloat32,
+                                                true));
     
-    // If the audio output was not running, start it now.
-    if( !wasRunning ) {
-        startOutput();
+    /* Clear the buffer queue. */
+    mCurrentBuffer.reset();
+    mBuffers.clear();
+
+    /* Restart the graph. */
+    result = AUGraphInitialize(mAUGraph);
+    
+    if(result != noErr) {
+        return false;
     }
     
+    result = AUGraphStart(mAUGraph);
+
+    if(result != noErr) {
+        return false;
+    }
+
     return true;
 }
 
@@ -1448,17 +1461,17 @@ OSStatus CoreAudioEndpoint::render(AudioUnitRenderActionFlags *ioActionFlags,
                                    AudioBufferList *ioData)
 {
     // Update the RawBuffer wrapper to point to the new AudioBufferList buffers.
-    mAudioBufferListWrapper.mBuffers[0].mBuffer = ioData->mBuffers[0].mData;
-    mAudioBufferListWrapper.mBuffers[1].mBuffer = ioData->mBuffers[1].mData;
-    mAudioBufferListWrapper.mFrames = inNumberFrames;
+    mAudioBufferListWrapper->mBuffers[0].mBuffer = ioData->mBuffers[0].mData;
+    mAudioBufferListWrapper->mBuffers[1].mBuffer = ioData->mBuffers[1].mData;
+    mAudioBufferListWrapper->mFrames = inNumberFrames;
     mAudioBufferListWrapper.reset();
     
     // Copy any left over data from the current buffer.
     if( mCurrentBuffer && (mCurrentBuffer->available() > 0) ) {
-        *mCurrentBuffer >> mAudioBufferListWrapper;
+        *mCurrentBuffer >> *mAudioBufferListWrapper;
     }
 
-    while( mAudioBufferListWrapper.space() > 0 ) {
+    while( mAudioBufferListWrapper->space() > 0 ) {
         
         // Release the current buffer if it hasn't been released.
         if( mCurrentBuffer ) {
@@ -1466,25 +1479,25 @@ OSStatus CoreAudioEndpoint::render(AudioUnitRenderActionFlags *ioActionFlags,
         }
         
         // Try to get a new buffer.
-        if( input()->tryPull(mCurrentBuffer) ) {
-            *mCurrentBuffer >> mAudioBufferListWrapper;
+        if( mBuffers.pop(&mCurrentBuffer) ) {
+            *mCurrentBuffer >> *mAudioBufferListWrapper;
         }
         else {
 
             // If absolutely nothing was written, signal we're outputting silence.
-            if( mAudioBufferListWrapper.mReadIndex == 0 ) {
+            if( mAudioBufferListWrapper->mReadIndex == 0 ) {
                 *ioActionFlags |= kAudioUnitRenderAction_OutputIsSilence;
             }
             
             // Fill the remaining space in each buffer with 0.
-            size_t byteCountToZero = mAudioBufferListWrapper.space() * sizeof(AudioUnitSampleType);
+            size_t byteCountToZero = mAudioBufferListWrapper->space() * sizeof(AudioUnitSampleType);
             
             for(UInt32 bufferIndex = 0;
                 bufferIndex < ioData->mNumberBuffers;
                 ++bufferIndex) {
                 
                 AudioUnitSampleType *bufferStart = (AudioUnitSampleType*)ioData->mBuffers[bufferIndex].mData;
-                memset(bufferStart + mAudioBufferListWrapper.mWriteIndex, 0, byteCountToZero);
+                memset(bufferStart + mAudioBufferListWrapper->mWriteIndex, 0, byteCountToZero);
             }
             
             // Break out here because space() won't be updated.
