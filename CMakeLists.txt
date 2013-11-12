@@ -63,6 +63,7 @@ set( audio_trusted_HDRS
 set( audio_SRCS
 	abstractclock.cpp
 	buffer.cpp
+	bufferfactory.cpp
 	bufferframes.cpp
 	bufferformat.cpp
 	bufferlength.cpp
@@ -85,6 +86,7 @@ set( audio_SRCS
 set( audio_HDRS
 	abstractclock.h
 	buffer.h
+	bufferfactory.h
 	bufferframes.h
 	bufferformat.h
 	bufferlength.h

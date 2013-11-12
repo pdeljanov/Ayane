@@ -84,7 +84,7 @@ CoreAudioEndpoint::CoreAudioEndpoint() : Stage(),
      */
     
     // Add output sink to stage.
-    addSink("input", new Sink(*this));
+    addSink("input");
 }
 
 CoreAudioEndpoint::~CoreAudioEndpoint() {
@@ -1232,24 +1232,6 @@ bool CoreAudioEndpoint::setAUOutputChannelLayout(AudioChannelLayout *channelLayo
 
 
 
-OSStatus CoreAudioEndpoint::renderNotify(AudioUnitRenderActionFlags *ioActionFlags,
-                                         const AudioTimeStamp *inTimeStamp,
-                                         UInt32 inBusNumber,
-                                         UInt32 inNumberFrames,
-                                         AudioBufferList *ioData)
-{
-    
-    if( *ioActionFlags & kAudioUnitRenderAction_PreRender) {
-        
-        // Handle buffer negotation here.
-        
-	}
-	else if( *ioActionFlags & kAudioUnitRenderAction_PostRender ) {
-
-    }
-    
-    return noErr;
-}
 
 
 
@@ -1292,10 +1274,8 @@ AudioBufferList * CoreAudioEndpoint::allocateABL(UInt32 channelsPerFrame,
 
 Stage::Sink *CoreAudioEndpoint::input()
 {
-    return m_sinks["input"];
+    return mSinks["input"];
 }
-
-
 
 bool CoreAudioEndpoint::beginPlayback() {
     std::cout << "CoreAudioEndpoint::beginPlayback" << std::endl;
@@ -1322,7 +1302,10 @@ bool CoreAudioEndpoint::beginPlayback() {
     // Don't actually start the device till a buffer is received.
     
     // Kick off the clock.
-    
+    mClockPeriod = 1.0;
+    mCurrentClockTick = 0.0;
+    mClockProvider.publish(mClockPeriod);
+
     return true;
 }
 
@@ -1335,20 +1318,29 @@ bool CoreAudioEndpoint::stoppedPlayback() {
     return true;
 }
 
-void CoreAudioEndpoint::process(){
-    std::cout << "CoreAudioEndpoint::process" << std::endl;
+
+
+
+
+void CoreAudioEndpoint::process( ProcessIOFlags *ioFlags ){
     
     std::unique_ptr<Buffer> buffer;
     
     // May kick off a sink reconfiguration.
-    if(input()->pull(&buffer)) {
+    if( input()->pull(&buffer) == Sink::kSuccess ) {
         
         // Pass ownership of buffer to the queue.
         mBuffers.push(buffer);
         
+        // Hint that the CoreAudioEndpoint could process more buffers since its
+        // internal ring buffer is not full.
+        if(!mBuffers.full()) {
+            (*ioFlags) |= kProcessMoreHint;
+        }
     }
     else {
-        std::cout << "CoreAudioEndpoint::process: Glitch." << std::endl;
+        std::cout << "CoreAudioEndpoint::process: Pull error. Ignoring."
+        << std::endl;
     }
     
 }
@@ -1356,13 +1348,17 @@ void CoreAudioEndpoint::process(){
 bool CoreAudioEndpoint::reconfigureSink(const Sink &sink,
                                         const BufferFormat &format){
     
-    std::cout << "CoreAudioEndpoint::reconfigureSink" << std::endl;
+    std::cout << "CoreAudioEndpoint::reconfigureSink: Attempting reconfiguration."
+    << std::endl;
     
     /* Stop and unitialiaze the AUGraph. */
 	Boolean graphIsRunning = FALSE;
 	OSStatus result = AUGraphIsRunning(mAUGraph, &graphIsRunning);
     
 	if(result != noErr) {
+        std::cout << "CoreAudioEndpoint::reconfigureSink: Couldn't get graph "
+        << "running state." << std::endl;
+        
 		return false;
 	}
 	
@@ -1371,6 +1367,8 @@ bool CoreAudioEndpoint::reconfigureSink(const Sink &sink,
 		result = AUGraphStop(mAUGraph);
         
 		if(result != noErr) {
+            std::cout << "CoreAudioEndpoint::reconfigureSink: Couldn't stop the "
+            << "graph." << std::endl;
 			return false;
 		}
 	}
@@ -1379,6 +1377,9 @@ bool CoreAudioEndpoint::reconfigureSink(const Sink &sink,
 	result = AUGraphIsInitialized(mAUGraph, &graphIsInitialized);
     
 	if(result != noErr) {
+        std::cout << "CoreAudioEndpoint::reconfigureSink: Couldn't get graph "
+        << "initialization state." << std::endl;
+        
 		return false;
 	}
 	
@@ -1387,6 +1388,8 @@ bool CoreAudioEndpoint::reconfigureSink(const Sink &sink,
 		result = AUGraphUninitialize(mAUGraph);
         
 		if(result != noErr) {
+            std::cout << "CoreAudioEndpoint::reconfigureSink: Couldn't "
+            "unitialize the graph." << std::endl;
 			return false;
 		}
 	}
@@ -1427,6 +1430,14 @@ bool CoreAudioEndpoint::reconfigureSink(const Sink &sink,
                                                 kFloat32,
                                                 true));
     
+    mAudioBufferListWrapper->mBuffers[0].mChannel = kFrontLeft;
+    mAudioBufferListWrapper->mBuffers[1].mChannel = kFrontRight;
+    
+    
+    /* Update the clock. */
+    mPeriodPerFrame = (1.0 / format.sampleRate());
+    
+    
     /* Clear the buffer queue. */
     mCurrentBuffer.reset();
     mBuffers.clear();
@@ -1435,22 +1446,59 @@ bool CoreAudioEndpoint::reconfigureSink(const Sink &sink,
     result = AUGraphInitialize(mAUGraph);
     
     if(result != noErr) {
+        std::cout << "CoreAudioEndpoint::reconfigureSink: Couldn't intialize "
+        "the graph." << std::endl;
         return false;
     }
     
     result = AUGraphStart(mAUGraph);
 
     if(result != noErr) {
+        std::cout << "CoreAudioEndpoint::reconfigureSink: Couldn't start the "
+        "graph." << std::endl;
         return false;
     }
 
+    std::cout<<"CoreAudioEndpoint::reconfigureSink: Reconfiguration successful."
+    " SampleRate=" << format.sampleRate() <<
+    ", ChannelCount=" << format.channelCount() <<
+    ", ChannelMap=" << format.channels() << std::endl;
+    
     return true;
 }
 
 
 
 
+ClockProvider &CoreAudioEndpoint::clockProvider() {
+    return mClockProvider;
+}
 
+
+OSStatus CoreAudioEndpoint::renderNotify(AudioUnitRenderActionFlags *ioActionFlags,
+                                         const AudioTimeStamp *inTimeStamp,
+                                         UInt32 inBusNumber,
+                                         UInt32 inNumberFrames,
+                                         AudioBufferList *ioData)
+{
+    
+    if( *ioActionFlags & kAudioUnitRenderAction_PreRender) {
+        
+        mCurrentClockTick += (inNumberFrames * mPeriodPerFrame);
+        
+        if( mCurrentClockTick >= mClockPeriod ){
+            mClockProvider.publish(mCurrentClockTick);
+            mCurrentClockTick = 0.0;
+        }
+
+        
+	}
+	else if( *ioActionFlags & kAudioUnitRenderAction_PostRender ) {
+        
+    }
+    
+    return noErr;
+}
 
 
 
@@ -1464,7 +1512,7 @@ OSStatus CoreAudioEndpoint::render(AudioUnitRenderActionFlags *ioActionFlags,
     mAudioBufferListWrapper->mBuffers[0].mBuffer = ioData->mBuffers[0].mData;
     mAudioBufferListWrapper->mBuffers[1].mBuffer = ioData->mBuffers[1].mData;
     mAudioBufferListWrapper->mFrames = inNumberFrames;
-    mAudioBufferListWrapper.reset();
+    mAudioBufferListWrapper->reset();
     
     // Copy any left over data from the current buffer.
     if( mCurrentBuffer && (mCurrentBuffer->available() > 0) ) {
@@ -1480,15 +1528,16 @@ OSStatus CoreAudioEndpoint::render(AudioUnitRenderActionFlags *ioActionFlags,
         
         // Try to get a new buffer.
         if( mBuffers.pop(&mCurrentBuffer) ) {
-            *mCurrentBuffer >> *mAudioBufferListWrapper;
+
+            (*mCurrentBuffer) >> (*mAudioBufferListWrapper);
         }
         else {
-
+            
             // If absolutely nothing was written, signal we're outputting silence.
             if( mAudioBufferListWrapper->mReadIndex == 0 ) {
                 *ioActionFlags |= kAudioUnitRenderAction_OutputIsSilence;
             }
-            
+
             // Fill the remaining space in each buffer with 0.
             size_t byteCountToZero = mAudioBufferListWrapper->space() * sizeof(AudioUnitSampleType);
             

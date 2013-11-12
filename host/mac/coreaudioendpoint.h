@@ -12,6 +12,7 @@
 #include <CoreAudio/CoreAudioTypes.h>
 #include <AudioToolbox/AudioToolbox.h>
 
+#include "audio/clockprovider.h"
 #include "audio/rawbuffer.h"
 #include "audio/stage.h"
 
@@ -52,12 +53,15 @@ namespace Stargazer {
 
             Sink *input();
             
+            ClockProvider &clockProvider();
             
         private:
             
+            class BufferingCriteria;
+            
             virtual bool beginPlayback();
             virtual bool stoppedPlayback();
-            virtual void process();
+            virtual void process(ProcessIOFlags *ioFlags);
             virtual bool reconfigureSink(const Sink &sink,
                                          const BufferFormat &format );
             
@@ -118,6 +122,11 @@ namespace Stargazer {
             
             UInt32 mMaxFramesPerSlice;
             
+            double mPeriodPerFrame;
+            double mClockPeriod;
+            double mNextClockTick;
+            double mCurrentClockTick;
+            ClockProvider mClockProvider;
     
             BufferQueue mBuffers;
             

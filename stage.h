@@ -1,6 +1,9 @@
 #ifndef STARGAZER_STDLIB_AUDIO_ABSTRACTSTAGE_H_
 #define STARGAZER_STDLIB_AUDIO_ABSTRACTSTAGE_H_
 
+// No one knows the names of the trampled flowers.
+// Fallen birds await the next wind before they try again.
+
 #include "bufferqueue.h"
 #include "clock.h"
 
@@ -14,197 +17,18 @@
 namespace Stargazer {
     namespace Audio {
         
+        
         /**
-         *  A Port represents an input or output for a stage.
+         *  A Stage is the basic building block in an audio pipeline. A Stage 
+         *  may produce, consume, or transform audio data that flows through it.
+         *
          */
         class Stage {
         public:
             
+            class Source;
             class Sink;
 
-            /**
-             *  A source provides the producing side of a one-to-one
-             *  connection between stages. When linked to a sink, a source
-             *  provides an interface for buffers to be pushed from the source
-             *  stage, and pulled from the sink stage.
-             */
-            class Source {
-                
-                friend class Stage;
-                
-            public:
-                
-                /** Enumeration of synchronicity modes for a Stage. Synchronicity modes
-                 *  control how a stage will be threaded.
-                 */
-                typedef enum
-                {
-                    
-                    /** Asynchronous operating mode. The Stage pushes buffers to its
-                     *  source ports in parallel with pull requests.
-                     */
-                    kAsynchronous,
-                    
-                    /** Synchronous operating mode. The Stage pushes buffers to its
-                     *  source ports only when a pull request is made.
-                     */
-                    kSynchronous
-                    
-                }
-                SynchronicityMode;
-                
-                /**
-                 *  Creates a new instance of Source.
-                 */
-                Source( Stage &stage );
-                
-                /**
-                 *  Source destructor. Clears all pending buffers and cancels
-                 *  any waiting pulls.
-                 */
-                ~Source();
-                
-                /**
-                 *  Attempts to push buffer to the source. If the source buffer
-                 *  queue is full, this function will block.
-                 */
-                void push( std::unique_ptr<Buffer> &buffer );
-                
-                /**
-                 *  Pulls a buffer from the source. This function blocks until a
-                 *  buffer is pulled.
-                 */
-                bool pull( std::unique_ptr<Buffer> *buffer );
-                
-                /**
-                 *  Attempts to pull a buffer from the source. This function 
-                 *  never blocks, but a buffer may not always be pulled.
-                 */
-                bool tryPull( std::unique_ptr<Buffer> *buffer );
-
-                /** 
-                 *  Cancels any pending request on the source port. 
-                 */
-                void cancel();
-                
-                /**
-                 *  Resets the source by clearing all pending buffers.
-                 */
-                void reset();
-                
-                /**
-                 *  Asks the Sink if it supports buffers of the specified format.
-                 */
-                bool checkFormatSupport( const BufferFormat &format ) const;
-                
-                /**
-                 *  Gets the synchonicity mode. Only valid after the stage is
-                 *  activated.
-                 */
-                SynchronicityMode synchronicity() const {
-                    return m_synchronicity;
-                }
-                
-            private:
-                
-                Stage &m_stage;
-                
-                BufferQueue m_buffers;
-                
-                // Mutex, and condition variables to implement blocking.
-                std::mutex m_mutex;
-                std::condition_variable m_cv;
-                volatile bool m_cancelled;
-                
-                // Synchronicity operating mode.
-                SynchronicityMode m_synchronicity;
-
-                Sink *m_sink;
-            };
-            
-            /**
-             *  A sink provides the consuming side of a one-to-one connection
-             *  between stages.  When linked to a source, a sink provides the 
-             *  interface to pull buffers from the linked source's stage.
-             */
-            class Sink {
-                
-                friend class Stage;
-                
-            public:
-                
-                /** Enumeration of scheduling modes for a Sink Port. Scheduling 
-                 *  modes help the pipeline assign a synchronicity mode to the 
-                 *  stage belonging to the sink's linked source port.
-                 */
-                typedef enum
-                {
-                    /**
-                     *  Default scheduling. No hints to the pipeline scheduler. 
-                     *  This mode is guaranteed to be safe for all valid 
-                     *  pipeline use cases.
-                     */
-                    kDefault,
-                    /**
-                     *  Forces the upstream port's stage to operate in 
-                     *  asynchronous mode. This mode can be helpful when 
-                     *  interfacing to outputs running on their own thread 
-                     *  (such as OS audio devices). This mode is safe, but may 
-                     *  not be as performant since it will create excess 
-                     *  processing threads. Therefore, only use when needed.
-                     */
-                    kForceAsynchronous
-                    
-                }
-                SchedulingMode;
-
-                /**
-                 *  Creates a new instance of Sink.
-                 */
-                Sink( Stage &stage );
-
-                /**
-                 *  Tests if the buffer format is compatible with the sink.
-                 */
-                bool checkFormatSupport( const BufferFormat &format ) const;
-                
-                /**
-                 *  Requests a buffer from the linked source. This function will
-                 *  wait until the source services the request. The returned buffer
-                 *  may be a different format between successive calls, but the sink
-                 *  will issue a port-specific reconfigureSink() event.
-                 */
-                bool pull( std::unique_ptr<Buffer> *outBuffer );
-                
-                /**
-                 *  Attempts to pull a buffer from the linked source. This 
-                 *  function will never block, but it may not always return a 
-                 *  buffer.
-                 */
-                bool tryPull( std::unique_ptr<Buffer> *outBuffer );
-
-                /**
-                 *  Gets the scheduling mode.
-                 */
-                SchedulingMode scheduling() const {
-                    return m_scheduling;
-                }
-                
-                /**
-                 *  Sets the scheduling mode. Only valid before a port is linked.
-                 */
-                void setScheduling(SchedulingMode mode) {
-                    m_scheduling = mode;
-                }
-                
-            private:
-
-                Stage &m_stage;
-                SchedulingMode m_scheduling;
-                
-                Source *m_source;
-            };
-            
             
             /** Collection type for sources. */
             typedef std::unordered_map<std::string, Source*> SourceCollection;
@@ -224,8 +48,27 @@ namespace Stargazer {
             typedef std::pair<SinkIterator, SinkIterator> SinkIteratorPair;
             typedef std::pair<ConstSinkIterator, ConstSinkIterator> ConstSinkIteratorPair;
 
+            
+            /** Enumeration of synchronicity modes for a Stage. Synchronicity modes
+             *  control how a stage will be threaded.
+             */
+            typedef enum
+            {
+                
+                /** Asynchronous operating mode. The Stage pushes buffers to its
+                 *  source ports in parallel with pull requests.
+                 */
+                kAsynchronous,
+                
+                /** Synchronous operating mode. The Stage pushes buffers to its
+                 *  source ports only when a pull request is made.
+                 */
+                kSynchronous
+                
+            }
+            SynchronicityMode;
 
-
+            
             /** Enumeration of Stage operating states. */
             typedef enum
             {
@@ -240,7 +83,6 @@ namespace Stargazer {
                 kPlaying
                 
             } State;
-
             
             
             Stage();
@@ -249,44 +91,40 @@ namespace Stargazer {
             /**
              *  Attempts to retreive a source port by name.
              */
-            bool source( const std::string &name, Source *port );
+            bool source( const std::string &name, Source *outSource );
             
             /**
              *  Attempts to retreive a sink by name.
              */
-            bool sink( const std::string &name, Sink *port );
+            bool sink( const std::string &name, Sink *outSink );
             
             /** 
              *  Gets an iterator begin/end pair for sources.
              */
             ConstSourceIteratorPair sourceIterator(){
-                return std::make_pair( m_sources.begin(), m_sources.end() );
+                return std::make_pair( mSources.begin(), mSources.end() );
             }
             
             /**
              *  Gets an iterator begin/end pair for sinks.
              */
             ConstSinkIteratorPair sinkIterator(){
-                return std::make_pair( m_sinks.begin(), m_sinks.end() );
+                return std::make_pair( mSinks.begin(), mSinks.end() );
             }
             
             /**
              *  Gets the number of sources.
              */
             int sourceCount() const {
-                return m_sources.size();
+                return mSources.size();
             }
             
             /**
              *  Gets the number of sinks.
              */
             int sinkCount() const {
-                return m_sinks.size();
+                return mSinks.size();
             }
-            
-            
-
-
             
             /** 
              *  Activates the stage to prepare it for playback. Thread-safe. 
@@ -308,33 +146,13 @@ namespace Stargazer {
              *  Stops playback. Thread-safe. 
              */
             void stop();
-            
-
 
             /**
-             *  Gets the stage's state.
+             *  Gets the stage's state. Thread-safe.
              */
             State state() const {
-                return m_state;
+                return mState;
             }
-            
-            
-            /** 
-             *  Called by the Stage when the next set of buffers should be
-             *  pushed to the Stage's sources.
-             */
-            virtual void process() = 0;
-
-            /**
-             *  Called by the Stage when the buffer format of sink changes.
-             *
-             *  This function is always called on the processing thread after
-             *  a pull call is made on a sink, but before the buffer is returned
-             *  to the caller.
-             *
-             */
-            virtual bool reconfigureSink(const Sink &sink,
-                                         const BufferFormat &format ) = 0;
             
 
             /**
@@ -348,21 +166,76 @@ namespace Stargazer {
             static void unlink( Source *source, Sink *sink );
             
         protected:
+            
+            /**
+             *  Enumeration of possible input/output flags for process.
+             */
+            typedef enum {
+                
+                /** 
+                 *  Output: Hints that the process callback can be called 
+                 *  atleast one more time. This flag is only useful for pure
+                 *  sink nodes that implement their own buffering scheme and
+                 *  would like an extra process run to occur to fill their
+                 *  internal buffer. This hint will be ignored if the stage is
+                 *  not run asynchronously, or sources are present on the stage.
+                 */
+                kProcessMoreHint = 1<<0
 
-            void addSource( const std::string &name, Source *port );
+            } ProcessIOFlag;
+            
+            /** 
+             *  Process input/output flags set. Bits in this type can be tested
+             *  against the flags in ProcessIOFlag.
+             */
+            typedef uint32_t ProcessIOFlags;
+            
+            /**
+             *  Adds a sources with the given name to the source list.
+             */
+            void addSource( const std::string &name );
+            
+            /**
+             *  Removes a source with the given name from the source list.
+             */
             void removeSource( const std::string &name );
 
-            void addSink( const std::string &name, Sink *port );
+            /**
+             *  Adds a sink with the given name to the sink list.
+             */
+            void addSink( const std::string &name );
+            
+            /**
+             *  Removes a sink with the given name from the sink list.
+             */
             void removeSink( const std::string &name );
             
             /**
              *  Gets the stage clock.
              */
             AbstractClock *clock() const {
-                return m_clock;
+                return mClock.get();
             }
             
-            /** Called by the Stage when transitioning from Activated to
+            /**
+             *  Called by the Stage when the next set of buffers should be
+             *  pushed to the Stage's sources.
+             */
+            virtual void process(ProcessIOFlags *ioFlags) = 0;
+            
+            /**
+             *  Called by the Stage when the buffer format of sink changes.
+             *
+             *  This function is always called on the processing thread after
+             *  a pull call is made on a sink, but before the buffer is returned
+             *  to the caller.
+             *
+             */
+            virtual bool reconfigureSink(const Sink &sink,
+                                         const BufferFormat &format ) = 0;
+            
+            /** 
+             *  Called by the Stage when transitioning from Activated to
              *  Playing.
              *
              *  The state of the stage between invocations of beginPlayback is
@@ -372,17 +245,26 @@ namespace Stargazer {
              */
             virtual bool beginPlayback() = 0;
             
-            /** Called by the Stage when transitioning from either Paused
+            /** 
+             *  Called by the Stage when transitioning from either Paused
              *  or Playing to Stopped.
              */
             virtual bool stoppedPlayback() = 0;
             
+            /** 
+             *  Map of sources. Keyed by name. 
+             */
+            SourceCollection mSources;
             
-            SourceCollection m_sources;
-            SinkCollection m_sinks;
+            /** 
+             *  Map of sinks. Keyed by name. 
+             */
+            SinkCollection mSinks;
             
         private:
             
+            // Forward declare shared state class for sources and sinks.
+            class SourceSinkPrivate;
 
             /** Begins asynchronous processing. */
             void startAsyncProcess();
@@ -395,26 +277,232 @@ namespace Stargazer {
             
             /** Stop function without locking. */
             void stopNoLock();
-            
+
             /** 
              *  Determines if the stage should opeate asynchronously given the
              *  current configuration.
              */
             bool shouldRunAsynchronous() const;
             
-            // State mutex.
-            std::mutex m_mutex;
-            State m_state;
+            /** Reports that a source's buffer queue is not full. */
+            void reportBufferQueueIsNotFull() {
+                ++mBufferQueuesReportedNotFull;
+            }
+            
+            // State tracking.
+            std::mutex mStateMutex;
+            State mState;
             
             // Thread for asynchronous processing.
-            std::thread m_thread;
-            AbstractClock *m_clock;
-            bool m_processingAsync;
+            std::thread mProcessingThread;
+            bool mAsynchronousProcessing;
+            
+            std::unique_ptr<AbstractClock> mClock;
+            uint32_t mBufferQueuesReportedNotFull;
+        };
 
+        /**
+         *  A source provides the producing side of a one-to-one
+         *  connection between stages. When linked to a sink, a source
+         *  provides an interface for buffers to be pushed from the source
+         *  stage, and pulled from the sink stage.
+         */
+        class Stage::Source {
+            
+            friend class Stage;
+            
+        public:
+            
+            /**
+             *  Source destructor. Clears all pending buffers and cancels
+             *  any waiting pulls.
+             */
+            ~Source();
+            
+            /**
+             *  Returns true if the source is linked to a sink, false otherwise.
+             */
+            bool isLinked() const;
+            
+            /**
+             *  Attempts to push buffer to the source. If the source buffer
+             *  queue is full, this function will drop the buffer.
+             */
+            void push( std::unique_ptr<Buffer> &buffer );
+            
+            /**
+             *  Resets the source by clearing all pending buffers.
+             */
+            void reset();
+            
+            /**
+             *  Checks if the linked sink supports the specified buffer format.
+             */
+            bool checkFormatSupport( const BufferFormat &format ) const;
+            
+            /**
+             *  Gets the synchonicity mode of the linked source and sink. 
+             *  Only valid after the stage is activated.
+             */
+            SynchronicityMode linkSynchronicity() const;
+            
+        private:
+
+            Source( Stage *stage );
+            
+            Stage *mStage;
+            Sink  *mLinkedSink;
+            
+            std::unique_ptr<SourceSinkPrivate> mShared;
+        };
+
+        
+        /**
+         *  A sink provides the consuming side of a one-to-one connection
+         *  between stages.  When linked to a source, a sink provides the
+         *  interface to pull buffers from the linked source's stage.
+         */
+        class Stage::Sink {
+            
+            friend class Stage;
+            
+        public:
+            
+            /** Enumeration of scheduling modes for a Sink Port. Scheduling
+             *  modes help the pipeline assign a synchronicity mode to the
+             *  stage belonging to the sink's linked source port.
+             */
+            typedef enum
+            {
+                /**
+                 *  Default scheduling. No hints to the pipeline scheduler.
+                 *  This mode is guaranteed to be safe for all valid
+                 *  pipeline use cases.
+                 */
+                kDefault,
+                /**
+                 *  Forces the upstream port's stage to operate in
+                 *  asynchronous mode. This mode can be helpful when
+                 *  interfacing to outputs running on their own thread
+                 *  (such as OS audio devices). This mode is safe, but may
+                 *  not be as performant since it will create excess
+                 *  processing threads. Therefore, only use when needed.
+                 */
+                kForceAsynchronous
+                
+            }
+            SchedulingMode;
+            
+            /**
+             *  Enumeration of possible results from pull operations.
+             */
+            typedef enum
+            {
+                /** A buffer was pulled successfully. */
+                kSuccess = 0,
+                
+                /** The pull was cancelled. */
+                kCancelled,
+                
+                /**
+                 *  The buffer received is in an unsupported format or the
+                 *  sink reconfiguration callback failed.
+                 */
+                kUnsupportedFormat,
+                
+                /** The source has no queued buffers. */
+                kBufferQueueEmpty,
+                
+                /**
+                 *  The requested operation is only valid on an asynchronous
+                 *  source.
+                 */
+                kNotAsynchronous
+                
+            } PullResult;
+            
+            
+            /**
+             *  Sink destructor.
+             */
+            ~Sink();
+            
+            /**
+             *  Returns true if the sink is linked to a source, false otherwise.
+             */
+            bool isLinked() const;
+            
+            /**
+             *  Tests if the buffer format is compatible with the sink.
+             */
+            bool checkFormatSupport( const BufferFormat &format ) const;
+            
+            /**
+             *  Requests a buffer from the linked source. This function will
+             *  wait until the source services the request. The returned buffer
+             *  may be a different format between successive calls, but the sink
+             *  will issue a port-specific reconfigureSink() event.
+             */
+            PullResult pull( std::unique_ptr<Buffer> *outBuffer );
+            
+            /**
+             *  Attempts to pull a buffer from the linked source. This
+             *  function will never block, but it may not always return a
+             *  buffer.
+             */
+            PullResult tryPull( std::unique_ptr<Buffer> *outBuffer );
+            
+            /**
+             *  Cancels any waiting pulls.
+             */
+            void cancelPull();
+            
+            /**
+             *  Gets the scheduling mode.
+             */
+            SchedulingMode scheduling() const {
+                return m_scheduling;
+            }
+            
+            /**
+             *  Sets the scheduling mode. Only valid before a port is linked.
+             */
+            void setScheduling(SchedulingMode mode) {
+                m_scheduling = mode;
+            }
+            
+            /**
+             *  Gets the synchonicity mode of the linked source and sink.
+             *  Only valid after the stage is activated.
+             */
+            SynchronicityMode linkSynchronicity() const;
+            
+            /**
+             *  Gets the buffer format the sink is currently configured for.
+             *  Note that the format may not be valid, test with
+             *  BufferFormat::isValid.
+             */
+            const BufferFormat &configuredBufferFormat() const {
+                return mBufferFormat;
+            }
+            
+        private:
+
+            Sink( Stage *stage );
+            
+            Stage  *mStage;
+            Source *mLinkedSource;
+            
+            SchedulingMode m_scheduling;
+            
+            SourceSinkPrivate *mShared;
+            
+            BufferFormat mBufferFormat;
+            
+            volatile bool mPullCancelled;
         };
         
-        
-        
+
         
     }
 }

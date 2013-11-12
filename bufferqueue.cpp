@@ -16,6 +16,15 @@ uint32_t BufferQueue::capacity() const {
     return mCount - 1;
 }
 
+bool BufferQueue::full() const {
+
+    int writeIndex = mWriteIndex.load(std::memory_order_relaxed);
+    int readIndex = mReadIndex.load(std::memory_order_relaxed);
+    int newWriteIndex = (writeIndex + 1) % mCount;
+
+    return (newWriteIndex == readIndex);
+}
+
 bool BufferQueue::empty() const {
     return (mWriteIndex == mReadIndex);
 }

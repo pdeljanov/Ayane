@@ -2,11 +2,40 @@
 
 #include <iostream>
 
+
+namespace Stargazer {
+    namespace Audio  {
+        
+        
+        class Stage::SourceSinkPrivate {
+            
+        public:
+            
+            SourceSinkPrivate();
+            ~SourceSinkPrivate();
+            
+            SynchronicityMode mLinkSynchronicity;
+            
+            BufferQueue mBufferQueue;
+            
+            std::mutex mPushMutex;
+            std::condition_variable mPushNotification;
+            
+        };
+        
+    }
+}
+
+
 using namespace Stargazer::Audio;
 
 /* Stage */
 
-Stage::Stage() : m_state(kDeactivated), m_clock(nullptr), m_processingAsync(false)
+Stage::Stage() :
+    mState(kDeactivated),
+    mAsynchronousProcessing(false),
+    mClock(nullptr),
+    mBufferQueuesReportedNotFull(0)
 {
     
 }
@@ -19,43 +48,68 @@ Stage::~Stage()
 
 void Stage::asyncProcessLoop()
 {
-    while(m_clock->wait()) {
-        process();
+    bool doBufferRun = false;
+    ProcessIOFlags ioFlags = 0;
+    uint32_t activeSources = mSources.size();
+
+    
+    while(doBufferRun || mClock->wait()) {
+
+        /*
+        std::cout << "Stage::asyncProcessLoop: "
+        << (doBufferRun ? "Buffered" : "Clocked") << " run."
+        << std::endl;
+        */
+        
+        ioFlags = 0;
+        mBufferQueuesReportedNotFull = 0;
+        
+        process(&ioFlags);
+
+        /*
+         * Two cases where extra buffering may occur:
+         * 1. All sources have reported they can take atleast 1 more buffer.
+         * 2. There are no active sources, but the stage is using internal
+         *    buffering and it is hinting that it can buffer more.
+         */
+        doBufferRun = ((mBufferQueuesReportedNotFull > 0) && (mBufferQueuesReportedNotFull == activeSources)) ||
+                      ((ioFlags & kProcessMoreHint) && (activeSources == 0));
+
     }
 
     std::cout << "Stage::asyncProcessLoop: Processing thread with ID: "
-    << m_thread.get_id() << " done." << std::endl;
+    << mProcessingThread.get_id() << " done." << std::endl;
 }
 
 void Stage::startAsyncProcess()
 {
-    if( !m_thread.joinable() ){
+    if( !mProcessingThread.joinable() ){
 
         // Start the clock.
-        m_clock->start();
-        m_thread = std::thread( &Stage::asyncProcessLoop, this );
+        mClock->start();
+        mProcessingThread = std::thread( &Stage::asyncProcessLoop, this );
         
         std::cout << "Stage::startAsyncProcess: Started thread with ID: "
-        << m_thread.get_id() << "." << std::endl;
+        << mProcessingThread.get_id() << "." << std::endl;
     }
     else
     {
         std::cout << "Stage::startAsyncProcess: Thread already started with ID: "
-        << m_thread.get_id() << "." << std::endl;
+        << mProcessingThread.get_id() << "." << std::endl;
     }
 
 }
 
 void Stage::stopAsyncProcess()
 {
-    if( m_thread.joinable() ){
+    if( mProcessingThread.joinable() ){
         
         std::cout << "Stage::stopAsyncProcess: Waiting for processing thread to"
         " stop." << std::endl;
         
         // Stop the clock. Processing thread will exit
-        m_clock->stop();
-        m_thread.join();
+        mClock->stop();
+        mProcessingThread.join();
         
         std::cout << "Stage::stopAsyncProcess: Processing thread stopped."
         << std::endl;
@@ -92,10 +146,10 @@ bool Stage::shouldRunAsynchronous() const {
     }
     else
     {
-        for(ConstSourceIterator iter = m_sources.begin(), end = m_sources.end();
+        for(ConstSourceIterator iter = mSources.begin(), end = mSources.end();
             iter != end; ++iter)
         {
-            const Sink *sink = iter->second->m_sink;
+            const Sink *sink = iter->second->mLinkedSink;
             
             // Ignore if source is unlinked.
             if( sink == nullptr ) {
@@ -113,7 +167,7 @@ bool Stage::shouldRunAsynchronous() const {
             }
             
             // If a downstream sink has multiple sinks, use async mode.
-            if( sink->m_stage.sinkCount() > 1 ) {
+            if( sink->mStage->sinkCount() > 1 ) {
                 return true;
             }
         }
@@ -125,13 +179,13 @@ bool Stage::shouldRunAsynchronous() const {
 
 bool Stage::activate()
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock(mStateMutex);
     
     // Deactivated -> Activated.
-    if( m_state == kDeactivated ) {
+    if( mState == kDeactivated ) {
         
         // Switch state to activated.
-        m_state = kActivated;
+        mState = kActivated;
         
         std::cout << "Stage::activate: Stage (" << this << ") activated."
         << std::endl;
@@ -144,26 +198,26 @@ bool Stage::activate()
 
 void Stage::deactivate()
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock(mStateMutex);
 
     // If the stage is in the playing state, stop playback.
-    if( m_state == kPlaying ) {
+    if( mState == kPlaying ) {
         // Stop playback. Use no-lock variant since we have the state lock.
         stopNoLock();
     }
     
     // If the stage is activated, proceed to deactivate it.
-    if( m_state == kActivated ) {
+    if( mState == kActivated ) {
 
         // Reset sources (clears synchronicity and empties buffers).
-        for(SourceIterator iter = m_sources.begin(), end = m_sources.end();
+        for(SourceIterator iter = mSources.begin(), end = mSources.end();
             iter != end; ++iter)
         {
             iter->second->reset();
         }
         
         // Record state.
-        m_state = kDeactivated;
+        mState = kDeactivated;
         
         std::cout << "Stage::deactivate: Stage (" << this << ") deactivated."
         << std::endl;
@@ -172,45 +226,44 @@ void Stage::deactivate()
 
 void Stage::play( AbstractClock *clock )
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock(mStateMutex);
 
     // Activated (Stopped) -> Playing
-    if( m_state == kActivated ) {
+    if( mState == kActivated ) {
         
         // Set the clock.
-        m_clock = clock;
+        mClock.reset(clock);
         
         // Determine synchronicity.
-        m_processingAsync = shouldRunAsynchronous();
+        mAsynchronousProcessing = shouldRunAsynchronous();
         
         std::cout << "Stage::play: Stage (" << this << ") will run "
-        << (m_processingAsync ? "asynchronously." : "synchronously.")
+        << (mAsynchronousProcessing ? "asynchronously." : "synchronously.")
         << std::endl;
         
         // Assign synchronicity mode to the sources.
-        Source::SynchronicityMode mode =
-            (m_processingAsync) ? Source::kAsynchronous : Source::kSynchronous;
+        SynchronicityMode mode = (mAsynchronousProcessing) ? kAsynchronous : kSynchronous;
         
-        for(SourceIterator iter = m_sources.begin(), end = m_sources.end();
+        for(SourceIterator iter = mSources.begin(), end = mSources.end();
             iter != end; ++iter)
         {
-            iter->second->m_synchronicity = mode;
+            iter->second->mShared->mLinkSynchronicity = mode;
         }
 
         // Begin playback callback. Must occur before buffers are processed!
         beginPlayback();
  
-        if( m_processingAsync ) {
+        if( mAsynchronousProcessing ) {
             // If asynchronous, start the processing thread.
             startAsyncProcess();
         }
         else {
             // Start the clock manually in synchronous mode.
-            m_clock->start();
+            mClock->start();
         }
         
         // Record the state.
-        m_state = kPlaying;
+        mState = kPlaying;
         
         std::cout << "Stage::play: Stage (" << this << ") playing."
         << std::endl;
@@ -219,22 +272,22 @@ void Stage::play( AbstractClock *clock )
 }
 
 void Stage::stop() {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock(mStateMutex);
     stopNoLock();
 }
 
 void Stage::stopNoLock()
 {
-    if( m_state == kPlaying ) {
+    if( mState == kPlaying ) {
         
-        if( m_processingAsync ) {
+        if( mAsynchronousProcessing ) {
             // If asynchronous, stop the processing thread.
             // Wait till processing stops.
             stopAsyncProcess();
         }
         else {
             // If synchronous, stop the clock manually.
-            m_clock->stop();
+            mClock->stop();
         }
         
         // Playback stopped callback. Must occur after all buffers are
@@ -242,16 +295,16 @@ void Stage::stopNoLock()
         stoppedPlayback();
 
         // Record the state.
-        m_state = kActivated;
+        mState = kActivated;
     }
 }
 
 
 
-void Stage::addSource(const std::string &name, Source *port)
+void Stage::addSource(const std::string &name)
 {
-    if( m_state == kDeactivated ){
-        m_sources.insert( std::make_pair(name, port) );
+    if( mState == kDeactivated ){
+        mSources.insert( std::make_pair(name, new Source(this)) );
     }
     else {
         std::cout << "Stage::addSource: Can't add source unless stage is "
@@ -259,10 +312,10 @@ void Stage::addSource(const std::string &name, Source *port)
     }
 }
 
-void Stage::addSink(const std::string &name, Sink *port)
+void Stage::addSink(const std::string &name)
 {
-    if( m_state == kDeactivated ) {
-        m_sinks.insert( std::make_pair(name, port) );
+    if( mState == kDeactivated ) {
+        mSinks.insert( std::make_pair(name, new Sink(this)) );
     }
     else {
         std::cout << "Stage::addSink: Can't add sink unless stage is "
@@ -273,13 +326,16 @@ void Stage::addSink(const std::string &name, Sink *port)
 
 bool Stage::link( Source *source, Sink *sink )
 {
-    if( (source->m_sink == nullptr) && (sink->m_source == nullptr) ) {
+    if( (source->mLinkedSink == nullptr) && (sink->mLinkedSource == nullptr) ) {
         
-        source->m_sink = sink;
-        sink->m_source = source;
-    
-        std::cout << "Stage::link: Linked: " << sink << " <----> "
-        << source << std::endl;
+        source->mLinkedSink = sink;
+        sink->mLinkedSource = source;
+
+        // Link the shared state.
+        sink->mShared = source->mShared.get();
+        
+        std::cout << "Stage::link: Linked: " << source->mStage << ":"
+        << source << " <----> " << sink->mStage <<  ":" << sink << std::endl;
         
         return true;
     }
@@ -292,17 +348,19 @@ bool Stage::link( Source *source, Sink *sink )
 void Stage::unlink( Source *source, Sink *sink )
 {
     // Only unlink if the ports are linked to each other.
-    if( (source->m_sink == sink) && (sink->m_source == source) ) {
+    if( (source->mLinkedSink == sink) && (sink->mLinkedSource == source) ) {
 
         // Stop both the source and sink side stages.
-        source->m_stage.stop();
-        sink->m_stage.stop();
+        source->mStage->stop();
+        sink->mStage->stop();
+
+        sink->mShared = nullptr;
+        source->mLinkedSink = nullptr;
+        sink->mLinkedSource = nullptr;
         
-        source->m_sink = nullptr;
-        sink->m_source = nullptr;
+        std::cout << "Stage::unlink: Unlinked: " << source->mStage << ":"
+        << source << " <----> " << sink->mStage <<  ":" << sink << std::endl;
         
-        std::cout << "Stage::unlink: Unlinked: " << sink << " <-/ /-> " << source
-        << std::endl;
     }
     else {
         std::cout << "Stage::unlink: Source: " << source << " not linked to "
@@ -311,29 +369,52 @@ void Stage::unlink( Source *source, Sink *sink )
 }
 
 
+/* Stage::SourceSinkPrivate */
+
+Stage::SourceSinkPrivate::SourceSinkPrivate() :
+    mLinkSynchronicity(kSynchronous),
+    mBufferQueue(2)
+{
+    
+}
+
+Stage::SourceSinkPrivate::~SourceSinkPrivate() {
+    
+}
+
+
 /* Stage::Source */
 
-Stage::Source::Source( Stage &stage ) :
-    m_stage(stage),
-    m_buffers(2),
-    m_cancelled(false),
-    m_synchronicity(kSynchronous)
+Stage::Source::Source( Stage *stage ) :
+    mStage(stage),
+    mLinkedSink(nullptr),
+    mShared(new Stage::SourceSinkPrivate)
 {
     
 }
 
 Stage::Source::~Source() {
     
-    // Cancels any awaiting pulls.
-    cancel();
+    // Unlink if necessary.
+    if( isLinked() ){
+        Stage::unlink(this, mLinkedSink);
+    }
     
     // Resets the buffer queue.
     reset();
 }
 
+bool Stage::Source::isLinked() const {
+    return !(mLinkedSink == nullptr);
+}
+
+Stage::SynchronicityMode Stage::Source::linkSynchronicity() const {
+    return mShared->mLinkSynchronicity;
+}
+
 bool Stage::Source::checkFormatSupport(const BufferFormat &format) const
 {
-    if( !m_sink->checkFormatSupport(format) ) {
+    if( !mLinkedSink->checkFormatSupport(format) ) {
         return true;
     }
     
@@ -342,90 +423,61 @@ bool Stage::Source::checkFormatSupport(const BufferFormat &format) const
 
 void Stage::Source::push(std::unique_ptr<Buffer> &buffer)
 {
-    if( !m_buffers.push(buffer) ) {
+    if( !mShared->mBufferQueue.push(buffer) ) {
         // Buffer couldn't be inserted due to the queue being full. This should
-        // not happen unless the upstream sink isn't working properly.
+        // not happen unless the downstream sink isn't working properly.
         std::cout << "Stage::Source::push: Failed to push buffer." << std::endl;
+        return;
     }
     
-    if( m_synchronicity == kAsynchronous ) {
-        m_cv.notify_one();
-    }
-}
-
-void Stage::Source::cancel()
-{
-    // No-op in synchronous mode.
-    if( m_synchronicity == kAsynchronous ) {
+    if( mShared->mLinkSynchronicity == kAsynchronous ) {
         
-        std::lock_guard<std::mutex> lock(m_mutex);
-        
-        // Set cancellation flag.
-        m_cancelled = true;
-        
-        // Notify any waiting pulls that it can cancel its wait.
-        m_cv.notify_one();
-    }
-}
-
-bool Stage::Source::pull( std::unique_ptr<Buffer> *buffer )
-{
-    switch(m_synchronicity) {
-        case kAsynchronous: {
-            
-            std::unique_lock<std::mutex> lock(m_mutex);
-            
-            // Wait for a buffer to be pushed into the queue.
-            while( m_buffers.empty() ) {
-                m_cv.wait(lock);
-
-                if( m_cancelled ) {
-                    m_cancelled = false;
-                    return false;
-                }
-            }
-            
-            // Return the popped buffer.
-            return m_buffers.pop(buffer);
+        // Report if the buffer queue is not full.
+        if( !mShared->mBufferQueue.full() ) {
+            mStage->reportBufferQueueIsNotFull();
         }
-        case kSynchronous: {
-
-            // Generate a buffer only if one isn't already pending.
-            if( m_buffers.empty() ) {
-                m_stage.process();
-            }
-
-            // Return popped buffer.
-            return m_buffers.pop(buffer);
-        }
+        
+        mShared->mPushNotification.notify_one();
     }
     
-}
 
-
-bool Stage::Source::tryPull( std::unique_ptr<Buffer> *buffer ) {
-    
-    if( m_synchronicity == kAsynchronous ) {
-        return m_buffers.pop(buffer);
-    }
-
-    // tryPull makes no sense on synchronous sources because we can't
-    // control the types of pulls performed in the process function.
-    return false;
 }
 
 
 void Stage::Source::reset() {
     // Clear the queue.
-    m_buffers.clear();
+    mShared->mBufferQueue.clear();
 }
+
+
 
 /* Stage::Sink */
 
-Stage::Sink::Sink( Stage &stage ) :
-    m_stage(stage)
+Stage::Sink::Sink( Stage *stage ) :
+    mStage(stage),
+    mLinkedSource(nullptr),
+    mShared(nullptr),
+    mBufferFormat(),
+    mPullCancelled(false)
 {
     
+}
+
+Stage::Sink::~Sink() {
+    
+    // Unlink if necessary.
+    if( isLinked() ){
+        Stage::unlink(mLinkedSource, this);
+    }
+    
+}
+
+bool Stage::Sink::isLinked() const {
+    return !(mLinkedSource == nullptr);
+}
+
+Stage::SynchronicityMode Stage::Sink::linkSynchronicity() const {
+    return mShared->mLinkSynchronicity;
 }
 
 bool Stage::Sink::checkFormatSupport( const BufferFormat &format ) const
@@ -434,36 +486,88 @@ bool Stage::Sink::checkFormatSupport( const BufferFormat &format ) const
     return true;
 }
 
-bool Stage::Sink::pull( std::unique_ptr<Buffer> *outBuffer )
+Stage::Sink::PullResult Stage::Sink::pull( std::unique_ptr<Buffer> *outBuffer )
 {
-    if( !m_source->pull(outBuffer) ) {
-        return false;
-    }
-
-    // If the buffer has a format negotiation flag, issue a reconfigure
-    // call which will allow the stage to adapt for the new format.
-    if( (*outBuffer)->flags() & Buffer::kFormatNegotiation ) {
-        if( !m_stage.reconfigureSink(*this, (*outBuffer)->format()) ){
-            return false;
+    switch(mShared->mLinkSynchronicity) {
+        case kAsynchronous: {
+            
+            std::unique_lock<std::mutex> lock(mShared->mPushMutex);
+            
+            // Wait for a buffer to be pushed into the queue.
+            while( mShared->mBufferQueue.empty() ) {
+                mShared->mPushNotification.wait(lock);
+                
+                // TODO: Very sloppy to reset mPullCancelled here because other
+                // threads theoretically could be waiting here.
+                if( mPullCancelled ) {
+                    mPullCancelled = false;
+                    return kCancelled;
+                }
+            }
+        }
+        case kSynchronous: {
+            // Generate a buffer only if one isn't already pending.
+            if( mShared->mBufferQueue.empty() ) {
+                ProcessIOFlags ioFlags = 0;
+                mLinkedSource->mStage->process(&ioFlags);
+            }
         }
     }
     
-    return true;
+    if( !mShared->mBufferQueue.pop(outBuffer) ) {
+        return kBufferQueueEmpty;
+    }
+    
+    // Check if the buffer's format matches the sink's format.
+    if( (*outBuffer)->format() != mBufferFormat ) {
+        if( !mStage->reconfigureSink(*this, (*outBuffer)->format()) ){
+            return kUnsupportedFormat;
+        }
+        
+        // Format accepted.
+        mBufferFormat = (*outBuffer)->format();
+    }
+    
+    return kSuccess;
 }
 
-bool Stage::Sink::tryPull(std::unique_ptr<Buffer> *outBuffer ) {
+Stage::Sink::PullResult Stage::Sink::tryPull(std::unique_ptr<Buffer> *outBuffer) {
     
-    if( !m_source->tryPull(outBuffer) ) {
-        return false;
-    }
-    
-    // If the buffer has a format negotiation flag, issue a reconfigure
-    // call which will allow the stage to adapt for the new format.
-    if( (*outBuffer)->flags() & Buffer::kFormatNegotiation ) {
-        if( !m_stage.reconfigureSink(*this, (*outBuffer)->format()) ){
-            return false;
+    if( mShared->mLinkSynchronicity == kAsynchronous ) {
+        if( !mShared->mBufferQueue.pop(outBuffer) ) {
+            return kBufferQueueEmpty;
         }
     }
+    else {
+        // tryPull makes no sense on synchronous sources because we can't
+        // control the types of pulls performed upstream.
+        return kNotAsynchronous;
+    }
     
-    return true;
+    // Check if the buffer's format matches the sink's format.
+    if( (*outBuffer)->format() != mBufferFormat ) {
+        if( !mStage->reconfigureSink(*this, (*outBuffer)->format()) ){
+            return kUnsupportedFormat;
+        }
+        
+        // Format accepted.
+        mBufferFormat = (*outBuffer)->format();
+    }
+    
+    return kSuccess;
+}
+
+void Stage::Sink::cancelPull()
+{
+    // No-op in synchronous mode.
+    if( mShared->mLinkSynchronicity == kAsynchronous ) {
+        
+        std::lock_guard<std::mutex> lock(mShared->mPushMutex);
+        
+        // Set cancellation flag.
+        mPullCancelled = true;
+        
+        // Notify any waiting pulls that it can cancel its wait.
+        mShared->mPushNotification.notify_all();
+    }
 }

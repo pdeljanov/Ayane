@@ -26,7 +26,7 @@ void Clock::start() {
         return;
     }
     
-    m_updateDelta = 0.0;
+    //m_updateDelta = 0.0;
     m_started = true;
 }
 

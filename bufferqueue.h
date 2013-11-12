@@ -25,6 +25,7 @@ namespace Stargazer {
             
             uint32_t capacity() const;
             
+            bool full() const;
             bool empty() const;
             
             void clear();

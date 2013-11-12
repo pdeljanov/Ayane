@@ -330,7 +330,6 @@ void TypedBuffer<T>::read(RawBuffer &buffer) {
     
     unsigned int length = std::min(buffer.space(), m_wr - m_rd);
     
-    
     // Loop through each channel available in the raw buffer.
     for( int i = 0; i < buffer.mChannelCount; ++i ){
         
@@ -541,7 +540,7 @@ template< typename T >
 void TypedBuffer<T>::write( RawBuffer &buffer ) {
     
     unsigned int length = std::min(buffer.available(), m_length.frames() - m_wr);
-    
+
     // Loop through each channel available in the raw buffer.
     for( int i = 0; i < buffer.mChannelCount; ++i ){
         
