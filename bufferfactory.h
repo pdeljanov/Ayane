@@ -13,7 +13,9 @@ namespace Stargazer {
             static Buffer* make(SampleFormat sampleFormat,
                                 const BufferFormat &format,
                                 const BufferLength &length);
-            
+          
+        private:
+            STARGAZER_DISALLOW_DEFAULT_CTOR_COPY_AND_ASSIGN(BufferFactory);
         };
         
     }

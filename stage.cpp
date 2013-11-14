@@ -70,7 +70,7 @@ void Stage::syncProcessLoop() {
     }
     else {
         std::cout << "Stage::syncProcessLoop: Attempted to call "
-        "process on a Stage that is not playing." << std::endl;
+        "process() on a Stage that is not playing." << std::endl;
     }
 }
 
@@ -95,6 +95,8 @@ void Stage::asyncProcessLoop()
         {
             // Acquire the state lock, and then do a process run.
             std::lock_guard<std::mutex> lock(mStateMutex);
+
+            // Cancellation flag?
             process(&ioFlags);
         }
         
@@ -380,6 +382,11 @@ void Stage::endReconfiguration(ReconfigureData& data) {
 
 bool Stage::replace(Source *current, Source *next, Sink *sink) {
     
+    // Null pointer check.
+    if((current == nullptr) || (next == nullptr) || (sink == nullptr)) {
+        return false;
+    }
+    
     // Check if trying to replace the current source with itself.
     if( current == next ) {
         
@@ -427,6 +434,11 @@ bool Stage::replace(Source *current, Source *next, Sink *sink) {
 
 bool Stage::link( Source *source, Sink *sink )
 {
+    // Null pointer check.
+    if( (source == nullptr) || (sink == nullptr) ) {
+        return false;
+    }
+    
     if( (source->mLinkedSink == nullptr) && (sink->mLinkedSource == nullptr) ) {
         
         ReconfigureData sinkData, sourceData;
@@ -455,6 +467,11 @@ bool Stage::link( Source *source, Sink *sink )
 
 void Stage::unlink( Source *source, Sink *sink )
 {
+    // Null pointer check.
+    if( (source == nullptr) || (sink == nullptr) ) {
+        return;
+    }
+    
     // Only unlink if the ports are linked to each other.
     if( (source->mLinkedSink == sink) && (sink->mLinkedSource == source) ) {
 
@@ -518,7 +535,7 @@ Stage::Source::~Source() {
 }
 
 bool Stage::Source::isLinked() const {
-    return !(mLinkedSink == nullptr);
+    return (mLinkedSink != nullptr);
 }
 
 Stage::SynchronicityMode Stage::Source::linkSynchronicity() const {
@@ -590,7 +607,7 @@ void Stage::Sink::reset() {
 }
 
 bool Stage::Sink::isLinked() const {
-    return !(mLinkedSource == nullptr);
+    return (mLinkedSource != nullptr);
 }
 
 Stage::SynchronicityMode Stage::Sink::linkSynchronicity() const {
@@ -613,9 +630,7 @@ Stage::Sink::PullResult Stage::Sink::pull( std::unique_ptr<Buffer> *outBuffer )
             // Wait for a buffer to be pushed into the queue.
             while( mShared->mBufferQueue.empty() ) {
                 mShared->mPushNotification.wait(lock);
-                
-                // TODO: Very sloppy to reset mPullCancelled here because other
-                // threads theoretically could be waiting.
+
                 if( mPullCancelled ) {
                     mPullCancelled = false;
                     return kCancelled;
@@ -684,6 +699,6 @@ void Stage::Sink::cancelPull()
         mPullCancelled = true;
         
         // Notify any waiting pulls that it can cancel its wait.
-        mShared->mPushNotification.notify_all();
+        mShared->mPushNotification.notify_one();
     }
 }

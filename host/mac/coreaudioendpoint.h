@@ -56,6 +56,7 @@ namespace Stargazer {
             ClockProvider &clockProvider();
             
         private:
+            STARGAZER_DISALLOW_COPY_AND_ASSIGN(CoreAudioEndpoint);
             
             class BufferingCriteria;
             

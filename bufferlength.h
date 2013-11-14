@@ -2,45 +2,79 @@
 #define STARGAZER_STDLIB_AUDIO_BUFFERLENGTH_H_
 
 #include "formats.h"
+#include "duration.h"
 
-/*  Ayane
- *
- *  Created by Philip Deljanov on 12-01-06.
- *  Copyright 2012 Philip Deljanov. All rights reserved.
- *
- */
-
-/** @file bufferlength.h
- * \brief Represents an audio buffer length which may be specified in frames or time duration.
- **/
-
-namespace Stargazer
-{
-    namespace Audio
-    {
+namespace Stargazer {
+    namespace Audio {
         
+        /**
+         *  BufferLength represents the length of a buffer in either time or 
+         *  dimensionless frame units.
+         *
+         *  The length of a buffer in absolute terms is simply the number of 
+         *  frames the buffer can hold. However, using a length in terms of 
+         *  frames is problematic because the length in time will vary depending
+         *  on the sample rate.  BufferLength solves this problem by 
+         *  transparently converting between the two units.
+         */
         class BufferLength
         {
             friend class Buffer;
             
         public:
             
-            enum TimeBase
+            /*
+             *  Enumeration of time base units used to represent the buffer
+             *  length.
+             */
+            enum LengthUnits
             {
-                Frames,
-                Duration
+                /** The time base units are in audio frames. */
+                kFrames,
+                /** The time base units are in time units. */
+                kTime
             };
             
-            BufferLength( );
-            BufferLength( double duration );
-            BufferLength( unsigned int frames );
-            BufferLength( const BufferLength& other );
+            /**
+             *  Instantiates a nil buffer length.
+             */
+            BufferLength();
             
-            TimeBase timeBase() const;
+            /**
+             *  Instantiates a buffer length with a time duration
+             */
+            explicit BufferLength(const Duration &duration);
             
+            /**
+             *  Instantuates a buffer length with a duration in frames.
+             */
+            explicit BufferLength(unsigned int frames);
+            
+            /*
+             *  Copy constructor. Don't mark as explicit.
+             */
+            BufferLength(const BufferLength& other);
+            
+            /**
+             *  Gets the underlying unit used to represent the length.
+             */
+            LengthUnits units() const;
+            
+            /**
+             *  Gets the duration in seconds. If the underlying unit is time,
+             *  the rate parameter may be omitted.
+             */
             double duration( SampleRate rate = 0 ) const;
+            
+            /**
+             *  Gets the duration in number of frames.  If the underlying unit
+             *  is frames, the rate parameter may be omitted.
+             */
             unsigned int frames( SampleRate rate = 0 ) const;
             
+            /**
+             *  Returns true if the length is 0.
+             */
             bool isNil() const;
             
             BufferLength& operator= ( const BufferLength& other );
@@ -48,14 +82,13 @@ namespace Stargazer
             
         private:
             
-            TimeBase m_timeBase;
-            double m_duration;
-            unsigned int m_frames;
+            LengthUnits mUnits;
+            double mDuration;
+            unsigned int mFrames;
             
         };
         
     }
-    
 }
 
 #endif

@@ -14,18 +14,21 @@ namespace Stargazer
             friend class Buffer;
             
         public:
-            BufferFormat( );
-            BufferFormat( Channels channels, SampleRate sampleRate );
-            BufferFormat( const BufferFormat &format );
+            BufferFormat();
+            BufferFormat(Channels channels, SampleRate sampleRate);
+            BufferFormat(const BufferFormat &format);
             
-            inline Channels channels() const
-            { return m_channels; }
+            inline Channels channels() const {
+                return mChannels;
+            }
             
-            inline unsigned int channelCount() const
-            { return m_samplesPerFrame; }
+            inline unsigned int channelCount() const {
+                return mSamplesPerFrame;
+            }
             
-            inline SampleRate sampleRate() const
-            { return m_sampleRate; }
+            inline SampleRate sampleRate() const {
+                return mSampleRate;
+            }
             
             bool isValid() const;
             
@@ -40,9 +43,9 @@ namespace Stargazer
             
         private:
             
-            Channels m_channels;
-            SampleRate m_sampleRate;
-            unsigned int m_samplesPerFrame;
+            Channels mChannels;
+            SampleRate mSampleRate;
+            unsigned int mSamplesPerFrame;
             
         };
         

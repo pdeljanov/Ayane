@@ -10,6 +10,8 @@
 
 #include <core/alignedmemory.h>
 
+#include <algorithm>
+
 using namespace Stargazer::Audio;
 
 Buffer::Buffer ( const BufferFormat &format, const BufferLength &length ) :
@@ -22,30 +24,14 @@ Buffer::Buffer ( const BufferFormat &format, const BufferLength &length ) :
 
 }
 
-Buffer::Buffer ( const Buffer &source ) : m_timestamp(0)
+Buffer::~Buffer()
 {
-    /*
-    // Copy the buffer attributes from the source buffer.
-    m_format = source.m_format;
-    m_length = source.m_length;
-    m_samples = source.m_samples;
-    
-    // Allocate the buffer with 16 byte alignment.
-    m_buffer = AlignedMemory::allocate16<unsigned char>(m_samples * m_stride);
-    
-    // Copy the source buffer's data into this buffer.
-    memcpy ( m_buffer, source.m_buffer, m_stride * m_samples );
-     */
-}
-
-Buffer::~Buffer( )
-{
-    // :)
+    // Nothing to do here.
 }
 
 Duration Buffer::duration() const
 {
-    return Duration ( m_length.duration ( m_format.m_sampleRate ) );
+    return Duration ( m_length.duration ( m_format.mSampleRate ) );
 }
 
 const Duration& Buffer::timestamp() const
@@ -65,7 +51,7 @@ const BufferFormat& Buffer::format() const
 
 unsigned int Buffer::frames() const
 {
-    return m_length.frames ( m_format.m_sampleRate );
+    return m_length.frames ( m_format.mSampleRate );
 }
 
 unsigned int Buffer::available() const {
@@ -331,14 +317,14 @@ void TypedBuffer<T>::read(RawBuffer &buffer) {
     unsigned int length = std::min(buffer.space(), m_wr - m_rd);
     
     // Loop through each channel available in the raw buffer.
-    for( int i = 0; i < buffer.mChannelCount; ++i ){
+    for( uint32_t i = 0; i < buffer.mChannelCount; ++i ){
         
         // Skip the channel if the buffer doesn't support it.
         if( !(m_format.channels() & buffer.mBuffers[i].mChannel) ) {
             continue;
         }
         
-        T *in = m_ch[ChannelToCanonicalIndex(buffer.mBuffers[i].mChannel)] + m_rd;
+        T *in = m_ch[CanonicalChannels::indexOf(buffer.mBuffers[i].mChannel)] + m_rd;
         
         switch (buffer.mFormat) {
             case kInt16: {
@@ -542,14 +528,14 @@ void TypedBuffer<T>::write( RawBuffer &buffer ) {
     unsigned int length = std::min(buffer.available(), frames() - m_wr);
 
     // Loop through each channel available in the raw buffer.
-    for( int i = 0; i < buffer.mChannelCount; ++i ){
+    for( uint32_t i = 0; i < buffer.mChannelCount; ++i ){
         
         // Skip the channel if the buffer doesn't support it.
         if( !(m_format.channels() & buffer.mBuffers[i].mChannel) ) {
             continue;
         }
         
-        T *out = m_ch[ChannelToCanonicalIndex(buffer.mBuffers[i].mChannel)] + m_wr;
+        T *out = m_ch[CanonicalChannels::indexOf(buffer.mBuffers[i].mChannel)] + m_wr;
         
         switch (buffer.mFormat) {
             case kInt16: {

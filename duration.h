@@ -39,7 +39,7 @@ namespace Stargazer
             
         private:
             
-            double m_time;
+            double mTime;
             
         };
         

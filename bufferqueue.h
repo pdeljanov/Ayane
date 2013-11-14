@@ -32,6 +32,7 @@ namespace Stargazer {
 
 
         private:
+            STARGAZER_DISALLOW_COPY_AND_ASSIGN(BufferQueue);
 
             const uint32_t mCount;
             std::atomic_uint mWriteIndex;

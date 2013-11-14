@@ -3,60 +3,60 @@
 using namespace Stargazer::Audio;
 
 BufferLength::BufferLength() :
-    m_timeBase( Frames ), m_duration( 0 ), m_frames( 0 )
+    mUnits(kFrames), mDuration(0.0), mFrames(0)
 {
-    
 }
 
-BufferLength::BufferLength ( double duration ) :
-    m_timeBase ( Duration ), m_duration ( duration ), m_frames ( 0 )
+BufferLength::BufferLength (const Duration &duration) :
+    mUnits(kTime), mDuration(duration.totalSeconds()), mFrames ( 0 )
 {
 }
 
 BufferLength::BufferLength ( unsigned int frames ) :
-    m_timeBase ( Frames ), m_duration ( 0 ), m_frames ( frames )
+    mUnits(kFrames), mDuration(0), mFrames(frames)
 {
 }
 
 BufferLength::BufferLength ( const BufferLength& other ) :
-    m_timeBase ( other.m_timeBase ), m_duration ( other.m_duration ), m_frames ( other.m_frames )
+    mUnits(other.mUnits), mDuration(other.mDuration), mFrames(other.mFrames)
 {
 }
 
-double BufferLength::duration ( SampleRate rate ) const
-{
-    return ( m_timeBase == Duration ) ? m_duration : m_frames * rate;
+double BufferLength::duration(SampleRate rate) const {
+    
+    return ((mUnits == kTime) ? mDuration : (mFrames * rate));
 }
 
-unsigned int BufferLength::frames ( SampleRate rate ) const
-{
-    return ( m_timeBase == Frames ) ? m_frames : ( m_duration / 1000.0 ) * rate;
+unsigned int BufferLength::frames ( SampleRate rate ) const {
+    
+    return ((mUnits == kFrames) ? mFrames : (mDuration * rate));
 }
 
-bool BufferLength::isNil() const
-{
-    if ( ( m_frames == 0 ) && ( m_duration == 0.0f ) ) return true;
+bool BufferLength::isNil() const {
+    
+    if ((mFrames == 0) && (mDuration == 0.0)){
+        return true;
+    }
+    
     return false;
 }
 
-BufferLength::TimeBase BufferLength::timeBase() const
-{
-    return m_timeBase;
+BufferLength::LengthUnits BufferLength::units() const {
+    
+    return mUnits;
 }
 
-BufferLength& BufferLength::operator= ( const BufferLength& other )
-{
-    m_timeBase = other.m_timeBase;
-    m_duration = other.m_duration;
-    m_frames = other.m_frames;
-    return *this;
+BufferLength& BufferLength::operator=(const BufferLength& other) {
+    
+    mUnits = other.mUnits;
+    mDuration = other.mDuration;
+    mFrames = other.mFrames;
+    return (*this);
 }
 
-bool BufferLength::operator== ( const BufferLength& other ) const
-{
-    return (
-            ( m_timeBase == other.m_timeBase ) &&
-            ( m_frames == other.m_frames ) &&
-            ( m_duration == other.m_duration )
-            );
+bool BufferLength::operator==(const BufferLength& other) const {
+    
+    return ((mUnits == other.mUnits) &&
+            (mFrames == other.mFrames) &&
+            (mDuration == other.mDuration));
 }

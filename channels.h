@@ -12,6 +12,7 @@
  * \brief Contains enumeration of audio channels.
  **/
 
+#include <core/macros.h>
 #include <cstdint>
 
 namespace Stargazer
@@ -67,20 +68,45 @@ namespace Stargazer
         
         const int kMaximumChannels = 11;
         
-        // TODO: Put in utility class.
-        static int ChannelToCanonicalIndex( Channel name ) {
-            return __builtin_ctz(name);
-        }
-        
         const Channels kChannelMask = 0x7FF;
-        
-        const Channel kCanonicalChannels[] =
+
+        static Channel kCanonicalChannels[] =
         {
-            kFrontLeft,  kFrontRight, kFrontCenter,       kLowFrequencyOne,
-            kBackLeft,   kBackRight,  kFrontLeftOfCenter, kFrontRightOfCenter,
-            kBackCenter, kSideLeft,   kSideRight
+            kFrontLeft,
+            kFrontRight,
+            kFrontCenter,
+            kLowFrequencyOne,
+            kBackLeft,
+            kBackRight,
+            kFrontLeftOfCenter,
+            kFrontRightOfCenter,
+            kBackCenter,
+            kSideLeft,
+            kSideRight
         };
         
+        
+        /**
+         *  CanonicalChannels is a utility class for dealing with audio channels
+         *  in Stargazer Audio specific ordering.
+         */
+        class CanonicalChannels {
+            
+        public:
+            
+            /**
+             *  Gets the canonical index of a channel.
+             */
+            static int indexOf( Channel name ) {
+                return __builtin_ctz(name);
+            }
+            
+        private:
+            STARGAZER_DISALLOW_DEFAULT_CTOR_COPY_AND_ASSIGN(CanonicalChannels);
+            
+        };
+        
+
         /** Enumeration of common channel layouts. **/
         enum ChannelLayout
         {

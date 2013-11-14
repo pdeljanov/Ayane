@@ -1302,7 +1302,7 @@ bool CoreAudioEndpoint::beginPlayback() {
     // Don't actually start the device till a buffer is received.
     
     // Kick off the clock.
-    mClockPeriod = 0.250;
+    mClockPeriod = 0.100;
     mCurrentClockTick = 0.0;
     mClockProvider.publish(mClockPeriod);
 
@@ -1346,10 +1346,6 @@ void CoreAudioEndpoint::process( ProcessIOFlags *ioFlags ){
             (*ioFlags) |= kProcessMoreHint;
         }
     }
-    else {
-        std::cout << "CoreAudioEndpoint::process: Pull error. Ignoring."
-        << std::endl;
-    }
     
 }
 
@@ -1360,6 +1356,8 @@ bool CoreAudioEndpoint::reconfigureIO() {
 
 bool CoreAudioEndpoint::reconfigureInputFormat(const Sink &sink,
                                                const BufferFormat &format){
+    
+#pragma unused(sink)
     
     std::cout << "CoreAudioEndpoint::reconfigureSink: Attempting reconfiguration."
     << std::endl;
@@ -1494,6 +1492,9 @@ OSStatus CoreAudioEndpoint::renderNotify(AudioUnitRenderActionFlags *ioActionFla
                                          UInt32 inNumberFrames,
                                          AudioBufferList *ioData)
 {
+#pragma unused(inTimeStamp)
+#pragma unused(inBusNumber)
+#pragma unused(ioData)
     
     if( *ioActionFlags & kAudioUnitRenderAction_PreRender) {
         
@@ -1521,6 +1522,9 @@ OSStatus CoreAudioEndpoint::render(AudioUnitRenderActionFlags *ioActionFlags,
                                    UInt32 inNumberFrames,
                                    AudioBufferList *ioData)
 {
+#pragma unused(inTimeStamp)
+#pragma unused(inBusNumber)
+    
     // Update the RawBuffer wrapper to point to the new AudioBufferList buffers.
     mAudioBufferListWrapper->mBuffers[0].mBuffer = ioData->mBuffers[0].mData;
     mAudioBufferListWrapper->mBuffers[1].mBuffer = ioData->mBuffers[1].mData;

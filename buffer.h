@@ -48,14 +48,13 @@ namespace Stargazer
                 kNone = 0,
                 
                 /** Format negotiation required. */
-                kFormatNegotiation = 1<<0
+                kEndOfStream = 1<<0
             }
             StreamFlag;
             
             typedef uint32_t StreamFlags;
             
             Buffer ( const BufferFormat &format, const BufferLength &length );
-            Buffer ( const Buffer &source );
 
             virtual ~Buffer();
             
@@ -438,6 +437,7 @@ namespace Stargazer
             void read( RawBuffer &buffer );
             
         private:
+            STARGAZER_DISALLOW_COPY_AND_ASSIGN(TypedBuffer<T>);
             
             typedef T* ChannelMap[kMaximumChannels];
             

@@ -352,15 +352,18 @@ static SampleInt16 kSineWave[240] = {
 
 int main(int argc, const char *argv[] )
 {
+#pragma unused(argc)
+#pragma unused(argv)
+    
 /*
-    //* Will be done by pipeline.
+    // Will be done by pipeline.
     std::unique_ptr<ClockProvider> cp( new ClockProvider() );
     Clock *sinkClock = new Clock();
     Clock *dspClock = new Clock();
     
     cp->registerClock(sinkClock);
     cp->registerClock(dspClock);
-    //*
+    //
     
     std::unique_ptr<TestSource> src( new TestSource );
     std::unique_ptr<TestDSP> dsp( new TestDSP );
@@ -370,7 +373,7 @@ int main(int argc, const char *argv[] )
     Stage::link( src->output(), dsp->input() );
     Stage::link( dsp->output(), sink->input() );
     
-    //* Will be done by pipeline
+    // Will be done by pipeline
     src->activate();
     dsp->activate();
     sink->activate();
@@ -378,7 +381,7 @@ int main(int argc, const char *argv[] )
     src->play( dspClock->makeObserver() );
     dsp->play( dspClock );
     sink->play( sinkClock );
-    //*
+    //
     
     while( true ) {
         
@@ -394,11 +397,11 @@ int main(int argc, const char *argv[] )
         }
     }
     
-    //* Will be done by pipeline
+    // Will be done by pipeline
     src->stop();
     dsp->stop();
     sink->stop();
-    //*
+    //
     
     // Unlink.
     Stage::unlink( src->output(), dsp->input() );

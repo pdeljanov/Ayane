@@ -3,7 +3,7 @@
 
 #include <cstddef>
 
-#include <vector>
+#include <core/macros.h>
 
 #include "formats.h"
 #include "channels.h"
@@ -126,6 +126,10 @@ namespace Stargazer
             
             /** Buffer descriptors. */
             BufferDescriptor mBuffers[kMaximumChannels];
+            
+        private:
+            STARGAZER_DISALLOW_DEFAULT_CTOR_COPY_AND_ASSIGN(RawBuffer);
+            
         };
         
     }

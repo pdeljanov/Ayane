@@ -21,7 +21,6 @@ namespace Stargazer {
         /**
          *  A Stage is the basic building block in an audio pipeline. A Stage 
          *  may produce, consume, or transform audio data that flows through it.
-         *
          */
         class Stage {
         public:
@@ -286,11 +285,11 @@ namespace Stargazer {
             SinkCollection mSinks;
             
         private:
+            STARGAZER_DISALLOW_COPY_AND_ASSIGN(Stage);
             
             class ReconfigureData;
-            
-            // Forward declare shared state class for sources and sinks.
             class SourceSinkPrivate;
+            
 
             /** Begins asynchronous processing. */
             void startAsyncProcess();
@@ -318,9 +317,11 @@ namespace Stargazer {
                 ++mBufferQueuesReportedNotFull;
             }
             
+            
             void beginReconfiguration( ReconfigureData& );
             
             void endReconfiguration( ReconfigureData& );
+            
             
             // State tracking.
             std::mutex mStateMutex;
@@ -380,7 +381,8 @@ namespace Stargazer {
             SynchronicityMode linkSynchronicity() const;
             
         private:
-
+            STARGAZER_DISALLOW_COPY_AND_ASSIGN(Source);
+            
             Source( Stage *stage );
             
             Stage *mStage;
@@ -525,7 +527,8 @@ namespace Stargazer {
             }
             
         private:
-
+            STARGAZER_DISALLOW_COPY_AND_ASSIGN(Sink);
+            
             Sink( Stage *stage );
             
             Stage  *mStage;
