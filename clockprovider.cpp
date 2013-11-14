@@ -19,16 +19,16 @@ ClockProvider::~ClockProvider() {
 }
 
 void ClockProvider::registerClock(Clock *clock) {
-    m_subscribers.push_back(clock);
+    mSubscribers.push_back(clock);
 }
 
 void ClockProvider::deregisterClock(Clock *clock) {
-    m_subscribers.remove(clock);
+    mSubscribers.remove(clock);
 }
 
 void ClockProvider::publish(double time) {
-    for (std::list<Clock*>::iterator iter = m_subscribers.begin(),
-         end = m_subscribers.end(); iter != end; ++iter ) {
+    for (std::list<Clock*>::iterator iter = mSubscribers.begin(),
+         end = mSubscribers.end(); iter != end; ++iter ) {
         
         (*iter)->advancePresentation(time);
         

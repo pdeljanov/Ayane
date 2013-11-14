@@ -27,16 +27,16 @@ namespace Stargazer {
             
             ~ClockObserver();
             
-            virtual double pipelineTime() const {
-                return m_clock->pipelineTime();
+            virtual inline double pipelineTime() const {
+                return mClock->pipelineTime();
             }
             
-            virtual double presentationTime() const {
-                return m_clock->presentationTime();
+            virtual inline double presentationTime() const {
+                return mClock->presentationTime();
             }
             
-            virtual double deltaTime() const {
-                return m_clock->deltaTime();
+            virtual inline double deltaTime() const {
+                return mClock->deltaTime();
             }
             
             virtual void start();
@@ -45,8 +45,8 @@ namespace Stargazer {
             virtual void advancePresentation( double );
             virtual void advancePipeline( double );
             
-            virtual bool wait() {
-                return m_clock->wait();
+            virtual inline bool wait() {
+                return mClock->wait();
             }
             
         private:
@@ -54,7 +54,7 @@ namespace Stargazer {
             
             ClockObserver( Clock *source );
             
-            Clock *m_clock;
+            Clock *mClock;
             
         };
         

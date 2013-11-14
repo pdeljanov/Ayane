@@ -74,7 +74,6 @@ set( audio_SRCS
 	refcountedpool.cpp
 	channels.cpp
 	duration.cpp
-	formatmismatchexception.cpp
 	formats.cpp
 	messagebus.cpp
 	pipeline.cpp
@@ -97,7 +96,6 @@ set( audio_HDRS
 	refcountedpool.h
 	channels.h
 	duration.h
-	formatmismatchexception.h
 	formats.h
 	messagebus.h
 	pipeline.h

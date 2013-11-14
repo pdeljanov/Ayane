@@ -35,14 +35,14 @@ namespace Stargazer {
              *  Gets the current timestamp of the pipeline.
              */
             virtual double pipelineTime() const {
-                return m_pipelineTime;
+                return mPipelineTime;
             }
             
             /**
              *  Gets the current output (playback) timestamp.
              */
             virtual double presentationTime() const {
-                return m_presentationTime;
+                return mPresentationTime;
             }
             
             /**
@@ -50,7 +50,7 @@ namespace Stargazer {
              *  calls.
              */
             virtual double deltaTime() const {
-                return m_deltaTime;
+                return mDeltaTime;
             }
             
             /**
@@ -100,28 +100,28 @@ namespace Stargazer {
             STARGAZER_DISALLOW_COPY_AND_ASSIGN(Clock);
             
             // Is the clock started?
-            bool m_started;
+            bool mStarted;
             
             // Pipeline time (current buffer timestamp).
-            double m_pipelineTime;
+            double mPipelineTime;
             
             // Presentation time (playback timestamp).
-            double m_presentationTime;
+            double mPresentationTime;
             
             // Time between wait() calls.
-            double m_deltaTime;
+            double mDeltaTime;
             
             // Latest update delta.
-            double m_updateDelta;
+            double mUpdateDelta;
             
             // Mutex to protect state.
-            std::mutex m_mutex;
+            std::mutex mStateMutex;
             
             // Condition variable to notify wait() of an advance().
-            std::condition_variable m_cond;
+            std::condition_variable mAdvanceNotification;
             
             // List of observing clocks.
-            std::list<ClockObserver*> m_observers;
+            std::list<ClockObserver*> mObservers;
         };
         
         

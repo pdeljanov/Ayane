@@ -14,10 +14,17 @@
 namespace Stargazer {
     namespace Audio {
         
+        /**
+         *  BufferFactory is a utility class to make constructing buffers of
+         *  a specific type easier.
+         */
         class BufferFactory
         {
         public:
             
+            /**
+             *  Creates a new buffer.
+             */
             static Buffer* make(SampleFormat sampleFormat,
                                 const BufferFormat &format,
                                 const BufferLength &length);

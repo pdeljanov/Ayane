@@ -44,7 +44,7 @@ namespace Stargazer {
         private:
             STARGAZER_DISALLOW_COPY_AND_ASSIGN(ClockProvider);
             
-            std::list<Clock*> m_subscribers;
+            std::list<Clock*> mSubscribers;
             
         };
         

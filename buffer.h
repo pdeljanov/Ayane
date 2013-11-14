@@ -59,21 +59,21 @@ namespace Stargazer
              *  Sets a buffer stream flag. 
              */
             inline void setFlag( StreamFlag flag ){
-                m_flags |= flag;
+                mFlags |= flag;
             }
             
             /** 
              *  Unsets a buffer stream flag. 
              */
             inline void unsetFlag( StreamFlag flag ){
-                m_flags ^= flag;
+                mFlags ^= flag;
             }
             
             /**
              *  Gets the buffer stream flags. 
              */
             StreamFlags flags() const {
-                return m_flags;
+                return mFlags;
             }
             
             /** 
@@ -256,17 +256,17 @@ namespace Stargazer
             
         protected:
             
-            BufferFormat m_format;
-            BufferLength m_length;
+            BufferFormat mFormat;
+            BufferLength mLength;
 
             // Timestamp
-            Duration m_timestamp;
+            Duration mTimestamp;
             
             // Buffer flags
-            StreamFlags m_flags;
+            StreamFlags mFlags;
             
-            unsigned int m_wr;
-            unsigned int m_rd;
+            unsigned int mWriteIndex;
+            unsigned int mReadIndex;
         };
 
         
@@ -439,7 +439,7 @@ namespace Stargazer
             typedef T* ChannelMap[kMaximumChannels];
             
 
-            ChannelMap m_ch = { nullptr };
+            ChannelMap mChannels = { nullptr };
             
             /**
              *  Builds the channel map for the requested channels using the specified

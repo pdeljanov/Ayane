@@ -7,3 +7,7 @@
  */
 
 #include "channels.h"
+
+using namespace Stargazer::Audio;
+
+constexpr Channel CanonicalChannels::kCanonicalChannels[];

@@ -20,6 +20,18 @@ namespace Stargazer
         /** Type used for storing a channel list (upto 32). */
         typedef uint32_t Channels;
         
+        /**
+         *  The maximum number of supported channels.
+         */
+        const int kMaximumChannels = 11;
+        
+        /**
+         *  The channel mask can be applied (via an AND operation) to a
+         *  ensure only valid channel bits are set.
+         */
+        const Channels kChannelMask = 0x7FF;
+        
+        
         /** Enumeration of channels. **/
         enum Channel
         {
@@ -62,47 +74,6 @@ namespace Stargazer
             /** Front right height (FRh) */
             /*kFrontRightHeight    = 1<<14*/
         };
-        
-        const int kMaximumChannels = 11;
-        
-        const Channels kChannelMask = 0x7FF;
-
-        static Channel kCanonicalChannels[] =
-        {
-            kFrontLeft,
-            kFrontRight,
-            kFrontCenter,
-            kLowFrequencyOne,
-            kBackLeft,
-            kBackRight,
-            kFrontLeftOfCenter,
-            kFrontRightOfCenter,
-            kBackCenter,
-            kSideLeft,
-            kSideRight
-        };
-        
-        
-        /**
-         *  CanonicalChannels is a utility class for dealing with audio channels
-         *  in Stargazer Audio specific ordering.
-         */
-        class CanonicalChannels {
-            
-        public:
-            
-            /**
-             *  Gets the canonical index of a channel.
-             */
-            static int indexOf( Channel name ) {
-                return __builtin_ctz(name);
-            }
-            
-        private:
-            STARGAZER_DISALLOW_DEFAULT_CTOR_COPY_AND_ASSIGN(CanonicalChannels);
-            
-        };
-        
 
         /** Enumeration of common channel layouts. **/
         enum ChannelLayout
@@ -193,6 +164,48 @@ namespace Stargazer
             
             /** Surround 11.1 */
             /*kSurround111    = kSurround110 | kLowFrequencyOne*/
+        };
+        
+        /**
+         *  CanonicalChannels is a utility class for dealing with audio channels
+         *  in Stargazer Audio specific ordering.
+         */
+        class CanonicalChannels {
+            
+        public:
+            
+            /**
+             *  Gets the canonical index of a channel.
+             */
+            static inline int indexOf( Channel name ) {
+                return __builtin_ctz(name);
+            }
+            
+            /**
+             *  Gets the channels from the canonical index.
+             */
+            static inline Channel get(int index) {
+                return kCanonicalChannels[index];
+            }
+            
+        private:
+            STARGAZER_DISALLOW_DEFAULT_CTOR_COPY_AND_ASSIGN(CanonicalChannels);
+            
+            static constexpr Channel kCanonicalChannels[] =
+            {
+                kFrontLeft,
+                kFrontRight,
+                kFrontCenter,
+                kLowFrequencyOne,
+                kBackLeft,
+                kBackRight,
+                kFrontLeftOfCenter,
+                kFrontRightOfCenter,
+                kBackCenter,
+                kSideLeft,
+                kSideRight
+            };
+            
         };
         
         

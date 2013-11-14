@@ -13,7 +13,10 @@
 namespace Stargazer {
     namespace Audio  {
         
-        
+        /**
+         *  SourceSinkPrivate stores the shared state between a linked Source 
+         *  and Sink.
+         */
         class Stage::SourceSinkPrivate {
             
         public:
@@ -30,6 +33,10 @@ namespace Stargazer {
             
         };
         
+        /**
+         *  ReconfigureData stores state information used between the
+         *  begin/endReconfiguration function pair.
+         */
         class Stage::ReconfigureData {
             
         public:
@@ -623,7 +630,8 @@ Stage::SynchronicityMode Stage::Sink::linkSynchronicity() const {
 
 bool Stage::Sink::checkFormatSupport( const BufferFormat &format ) const
 {
-    // Derp!
+#pragma unused(format)
+    // TODO: Implement range based format checking.
     return true;
 }
 

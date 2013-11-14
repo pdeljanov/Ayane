@@ -14,11 +14,11 @@
 using namespace Stargazer::Audio;
 
 Clock::Clock() :
-    m_started(false),
-    m_pipelineTime(0.0),
-    m_presentationTime(0.0),
-    m_deltaTime(0.0),
-    m_updateDelta(0.0)
+    mStarted(false),
+    mPipelineTime(0.0),
+    mPresentationTime(0.0),
+    mDeltaTime(0.0),
+    mUpdateDelta(0.0)
 {
     
 }
@@ -28,71 +28,71 @@ Clock::~Clock() {
 }
 
 void Clock::start() {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock(mStateMutex);
     
-    if( m_started ) {
+    if( mStarted ) {
         return;
     }
     
     //m_updateDelta = 0.0;
-    m_started = true;
-    m_cond.notify_all();
+    mStarted = true;
+    mAdvanceNotification.notify_all();
 }
 
 void Clock::stop() {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock(mStateMutex);
 
-    if( !m_started ) {
+    if( !mStarted ) {
         return;
     }
 
-    m_started = false;
-    m_cond.notify_all();
+    mStarted = false;
+    mAdvanceNotification.notify_all();
 }
 
 void Clock::reset( double time ) {
-    std::unique_lock<std::mutex> lock(m_mutex);
-    m_updateDelta = time - m_presentationTime;
-    m_cond.notify_all();
+    std::unique_lock<std::mutex> lock(mStateMutex);
+    mUpdateDelta = time - mPresentationTime;
+    mAdvanceNotification.notify_all();
 }
 
 void Clock::advancePresentation(double delta) {
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::unique_lock<std::mutex> lock(mStateMutex);
 
-    m_updateDelta = delta;
-    m_cond.notify_all();
+    mUpdateDelta = delta;
+    mAdvanceNotification.notify_all();
 }
 
 void Clock::advancePipeline(double delta) {
-    m_pipelineTime += delta;
+    mPipelineTime += delta;
 }
 
 bool Clock::wait() {
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::unique_lock<std::mutex> lock(mStateMutex);
     
     // Only wait if the current time is the same as the current time.
     // Only wait if the clock is started.
-    while( (m_updateDelta == 0.0) && m_started ) {
-        m_cond.wait(lock);
+    while( (mUpdateDelta == 0.0) && mStarted ) {
+        mAdvanceNotification.wait(lock);
     }
     
     // Update the times.
-    m_deltaTime = m_updateDelta;
-    m_presentationTime += m_updateDelta;
+    mDeltaTime = mUpdateDelta;
+    mPresentationTime += mUpdateDelta;
     
     // Reset update delta.
-    m_updateDelta = 0.0;
+    mUpdateDelta = 0.0;
     
     // Return clock state.
-    return m_started;
+    return mStarted;
 }
 
 ClockObserver *Clock::makeObserver() {
     ClockObserver *observer = new ClockObserver(this);
-    m_observers.push_back(observer);
+    mObservers.push_back(observer);
     return observer;
 }
 
 void Clock::removeObserver(ClockObserver *observer) {
-    m_observers.remove(observer);
+    mObservers.remove(observer);
 }

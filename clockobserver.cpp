@@ -13,12 +13,12 @@
 using namespace Stargazer::Audio;
 
 
-ClockObserver::ClockObserver( Clock *source ) : m_clock(source) {
+ClockObserver::ClockObserver( Clock *source ) : mClock(source) {
     
 }
 
 ClockObserver::~ClockObserver() {
-    m_clock->removeObserver(this);
+    mClock->removeObserver(this);
 }
 
 void ClockObserver::start() {

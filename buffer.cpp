@@ -16,11 +16,12 @@
 using namespace Stargazer::Audio;
 
 Buffer::Buffer ( const BufferFormat &format, const BufferLength &length ) :
-    m_format(format),
-    m_length(length),
-    m_timestamp(0),
-    m_flags(kNone),
-    m_wr(0), m_rd(0)
+    mFormat(format),
+    mLength(length),
+    mTimestamp(0),
+    mFlags(kNone),
+    mWriteIndex(0),
+    mReadIndex(0)
 {
 
 }
@@ -32,37 +33,37 @@ Buffer::~Buffer()
 
 Duration Buffer::duration() const
 {
-    return Duration ( m_length.duration ( m_format.mSampleRate ) );
+    return Duration ( mLength.duration ( mFormat.mSampleRate ) );
 }
 
 const Duration& Buffer::timestamp() const
 {
-    return m_timestamp;
+    return mTimestamp;
 }
 
 void Buffer::setTimestamp ( const Duration& timestamp )
 {
-    m_timestamp = timestamp;
+    mTimestamp = timestamp;
 }
 
 const BufferFormat& Buffer::format() const
 {
-    return m_format;
+    return mFormat;
 }
 
 unsigned int Buffer::frames() const
 {
-    return m_length.frames ( m_format.mSampleRate );
+    return mLength.frames ( mFormat.mSampleRate );
 }
 
 unsigned int Buffer::available() const {
     // Frames that can be read!
-    return m_wr - m_rd;
+    return mWriteIndex - mReadIndex;
 }
 
 unsigned int Buffer::space() const {
     // Frames that can be written!
-    return frames() - m_wr;
+    return frames() - mWriteIndex;
 }
 
 template<typename T>
@@ -79,14 +80,14 @@ TypedBuffer<T>::TypedBuffer( const BufferFormat &format, const BufferLength &len
     T *buffer = AlignedMemory::allocate16<T>(samples);
     
     // Build the channel map.
-    buildChannelMap(m_ch, format.channels(), buffer, frames);
+    buildChannelMap(mChannels, format.channels(), buffer, frames);
 }
 
 template<typename T>
 TypedBuffer<T>::~TypedBuffer()
 {
     // Deallocate the buffer.
-    AlignedMemory::deallocate(m_ch[0]);
+    AlignedMemory::deallocate(mChannels[0]);
     
     // Call base class destructor.
     Buffer::~Buffer();
@@ -111,10 +112,10 @@ void TypedBuffer<T>::buildChannelMap( ChannelMap map, Channels channels, T* base
     
     while( channels )
     {
-        if( channels & kCanonicalChannels[i] )
+        if( channels & CanonicalChannels::get(i) )
         {
             map[i] = (i > 0) ? (map[j] + stride) : base;
-            channels ^= kCanonicalChannels[i];
+            channels ^= CanonicalChannels::get(i);
             j = i;
         }
         else
@@ -158,7 +159,7 @@ template<typename T>
 template<typename OutSampleType>
 force_inline void TypedBuffer<T>::readChannel( Channel ch, T &is, OutSampleType &os )
 {
-    if( m_format.channels() & ch )
+    if( mFormat.channels() & ch )
         os = SampleFormats::convertSample<T, OutSampleType>(is);
 }
 
@@ -166,27 +167,27 @@ template< typename T >
 template< typename OutSampleType >
 force_inline void TypedBuffer<T>::read( Mono<OutSampleType> &i )
 {
-    i.FC = SampleFormats::convertSample<T, OutSampleType>(m_ch[0][m_rd]);
-    ++m_rd;
+    i.FC = SampleFormats::convertSample<T, OutSampleType>(mChannels[0][mReadIndex]);
+    ++mReadIndex;
 }
 
 template< typename T >
 template< typename OutSampleType >
 force_inline void TypedBuffer<T>::read( Stereo<OutSampleType> &i )
 {
-    i.FL = SampleFormats::convertSample<OutSampleType, T>(m_ch[0][m_rd]);
-    i.FR = SampleFormats::convertSample<OutSampleType, T>(m_ch[1][m_rd]);
-    ++m_rd;
+    i.FL = SampleFormats::convertSample<OutSampleType, T>(mChannels[0][mReadIndex]);
+    i.FR = SampleFormats::convertSample<OutSampleType, T>(mChannels[1][mReadIndex]);
+    ++mReadIndex;
 }
 
 template< typename T >
 template< typename OutSampleType >
 force_inline void TypedBuffer<T>::read( Stereo21<OutSampleType> &i )
 {
-    i.FL  = SampleFormats::convertSample<OutSampleType, T>(m_ch[0][m_rd]);
-    i.FR  = SampleFormats::convertSample<OutSampleType, T>(m_ch[1][m_rd]);
-    i.LFE = SampleFormats::convertSample<OutSampleType, T>(m_ch[3][m_rd]);
-    ++m_rd;
+    i.FL  = SampleFormats::convertSample<OutSampleType, T>(mChannels[0][mReadIndex]);
+    i.FR  = SampleFormats::convertSample<OutSampleType, T>(mChannels[1][mReadIndex]);
+    i.LFE = SampleFormats::convertSample<OutSampleType, T>(mChannels[3][mReadIndex]);
+    ++mReadIndex;
 }
 
 
@@ -195,84 +196,84 @@ template< typename T >
 template< typename OutSampleType >
 force_inline void TypedBuffer<T>::read( MultiChannel3<OutSampleType> &i )
 {
-    i.FL = SampleFormats::convertSample<OutSampleType, T>(m_ch[0][m_rd]);
-    i.FR = SampleFormats::convertSample<OutSampleType, T>(m_ch[1][m_rd]);
+    i.FL = SampleFormats::convertSample<OutSampleType, T>(mChannels[0][mReadIndex]);
+    i.FR = SampleFormats::convertSample<OutSampleType, T>(mChannels[1][mReadIndex]);
     
-    readChannel(kFrontCenter,     m_ch[2][m_rd], i.FC);
-    readChannel(kLowFrequencyOne, m_ch[3][m_rd], i.LFE);
-    readChannel(kBackCenter,      m_ch[8][m_rd], i.BC);
+    readChannel(kFrontCenter,     mChannels[2][mReadIndex], i.FC);
+    readChannel(kLowFrequencyOne, mChannels[3][mReadIndex], i.LFE);
+    readChannel(kBackCenter,      mChannels[8][mReadIndex], i.BC);
     
-    ++m_rd;
+    ++mReadIndex;
 }
 
 template< typename T >
 template< typename OutSampleType >
 force_inline void TypedBuffer<T>::read( MultiChannel4<OutSampleType> &i )
 {
-    i.FL = SampleFormats::convertSample<OutSampleType, T>(m_ch[0][m_rd]);
-    i.FR = SampleFormats::convertSample<OutSampleType, T>(m_ch[1][m_rd]);
+    i.FL = SampleFormats::convertSample<OutSampleType, T>(mChannels[0][mReadIndex]);
+    i.FR = SampleFormats::convertSample<OutSampleType, T>(mChannels[1][mReadIndex]);
     
-    readChannel(kFrontCenter,     m_ch[2][m_rd], i.FC);
-    readChannel(kLowFrequencyOne, m_ch[3][m_rd], i.LFE);
-    readChannel(kBackCenter,      m_ch[8][m_rd], i.BC);
-    readChannel(kBackLeft,        m_ch[4][m_rd], i.BL);
-    readChannel(kBackRight,       m_ch[5][m_rd], i.BR);
+    readChannel(kFrontCenter,     mChannels[2][mReadIndex], i.FC);
+    readChannel(kLowFrequencyOne, mChannels[3][mReadIndex], i.LFE);
+    readChannel(kBackCenter,      mChannels[8][mReadIndex], i.BC);
+    readChannel(kBackLeft,        mChannels[4][mReadIndex], i.BL);
+    readChannel(kBackRight,       mChannels[5][mReadIndex], i.BR);
     
-    ++m_rd;
+    ++mReadIndex;
 }
 
 template< typename T >
 template< typename OutSampleType >
 force_inline void TypedBuffer<T>::read( MultiChannel5<OutSampleType> &i )
 {
-    i.FL = SampleFormats::convertSample<OutSampleType, T>(m_ch[0][m_rd]);
-    i.FR = SampleFormats::convertSample<OutSampleType, T>(m_ch[1][m_rd]);
+    i.FL = SampleFormats::convertSample<OutSampleType, T>(mChannels[0][mReadIndex]);
+    i.FR = SampleFormats::convertSample<OutSampleType, T>(mChannels[1][mReadIndex]);
     
-    readChannel(kFrontCenter,     m_ch[2][m_rd],  i.FC);
-    readChannel(kLowFrequencyOne, m_ch[3][m_rd], i.LFE);
-    readChannel(kBackLeft,        m_ch[4][m_rd],  i.BL);
-    readChannel(kBackRight,       m_ch[5][m_rd],  i.BR);
-    readChannel(kSideLeft,        m_ch[9][m_rd],  i.SL);
-    readChannel(kSideRight,       m_ch[10][m_rd], i.SR);
+    readChannel(kFrontCenter,     mChannels[2][mReadIndex],  i.FC);
+    readChannel(kLowFrequencyOne, mChannels[3][mReadIndex], i.LFE);
+    readChannel(kBackLeft,        mChannels[4][mReadIndex],  i.BL);
+    readChannel(kBackRight,       mChannels[5][mReadIndex],  i.BR);
+    readChannel(kSideLeft,        mChannels[9][mReadIndex],  i.SL);
+    readChannel(kSideRight,       mChannels[10][mReadIndex], i.SR);
     
-    ++m_rd;
+    ++mReadIndex;
 }
 
 template< typename T >
 template< typename OutSampleType >
 force_inline void TypedBuffer<T>::read( MultiChannel6<OutSampleType> &i )
 {
-    i.FL = SampleFormats::convertSample<OutSampleType, T>(m_ch[0][m_rd]);
-    i.FR = SampleFormats::convertSample<OutSampleType, T>(m_ch[1][m_rd]);
+    i.FL = SampleFormats::convertSample<OutSampleType, T>(mChannels[0][mReadIndex]);
+    i.FR = SampleFormats::convertSample<OutSampleType, T>(mChannels[1][mReadIndex]);
     
-    readChannel(kFrontCenter,     m_ch[2][m_rd],  i.FC);
-    readChannel(kLowFrequencyOne, m_ch[3][m_rd],  i.LFE);
-    readChannel(kBackLeft,        m_ch[4][m_rd],  i.BL);
-    readChannel(kBackRight,       m_ch[5][m_rd],  i.BR);
-    readChannel(kBackCenter,      m_ch[8][m_rd],  i.BC);
-    readChannel(kSideLeft,        m_ch[9][m_rd],  i.SL);
-    readChannel(kSideRight,       m_ch[10][m_rd], i.SR);
+    readChannel(kFrontCenter,     mChannels[2][mReadIndex],  i.FC);
+    readChannel(kLowFrequencyOne, mChannels[3][mReadIndex],  i.LFE);
+    readChannel(kBackLeft,        mChannels[4][mReadIndex],  i.BL);
+    readChannel(kBackRight,       mChannels[5][mReadIndex],  i.BR);
+    readChannel(kBackCenter,      mChannels[8][mReadIndex],  i.BC);
+    readChannel(kSideLeft,        mChannels[9][mReadIndex],  i.SL);
+    readChannel(kSideRight,       mChannels[10][mReadIndex], i.SR);
     
-    ++m_rd;
+    ++mReadIndex;
 }
 
 template< typename T >
 template< typename OutSampleType >
 void TypedBuffer<T>::read( MultiChannel7<OutSampleType> &i )
 {
-    i.FL = SampleFormats::convertSample<OutSampleType, T>(m_ch[0][m_rd]);
-    i.FR = SampleFormats::convertSample<OutSampleType, T>(m_ch[1][m_rd]);
+    i.FL = SampleFormats::convertSample<OutSampleType, T>(mChannels[0][mReadIndex]);
+    i.FR = SampleFormats::convertSample<OutSampleType, T>(mChannels[1][mReadIndex]);
     
-    readChannel(kFrontCenter,        m_ch[2][m_rd],  i.FC);
-    readChannel(kLowFrequencyOne,    m_ch[3][m_rd],  i.LFE);
-    readChannel(kBackLeft,           m_ch[4][m_rd],  i.BL);
-    readChannel(kBackRight,          m_ch[5][m_rd],  i.BR);
-    readChannel(kFrontLeftOfCenter,  m_ch[6][m_rd],  i.FLc);
-    readChannel(kFrontRightOfCenter, m_ch[7][m_rd],  i.FRc);
-    readChannel(kSideLeft,           m_ch[9][m_rd],  i.SL);
-    readChannel(kSideRight,          m_ch[10][m_rd], i.SR);
+    readChannel(kFrontCenter,        mChannels[2][mReadIndex],  i.FC);
+    readChannel(kLowFrequencyOne,    mChannels[3][mReadIndex],  i.LFE);
+    readChannel(kBackLeft,           mChannels[4][mReadIndex],  i.BL);
+    readChannel(kBackRight,          mChannels[5][mReadIndex],  i.BR);
+    readChannel(kFrontLeftOfCenter,  mChannels[6][mReadIndex],  i.FLc);
+    readChannel(kFrontRightOfCenter, mChannels[7][mReadIndex],  i.FRc);
+    readChannel(kSideLeft,           mChannels[9][mReadIndex],  i.SL);
+    readChannel(kSideRight,          mChannels[10][mReadIndex], i.SR);
     
-    ++m_rd;
+    ++mReadIndex;
 }
 
 template< typename T >
@@ -281,7 +282,7 @@ void TypedBuffer<T>::read(TypedBuffer<OutSampleType> &buffer)
 {
     // Compatability check first. Buffers must be equal length in frames, and sample
     // rate. Required, or else resampling will need to be performed.
-    if((buffer.m_format.sampleRate() != m_format.sampleRate()) ||
+    if((buffer.mFormat.sampleRate() != mFormat.sampleRate()) ||
        (buffer.frames() != frames())
        )
     {
@@ -291,7 +292,7 @@ void TypedBuffer<T>::read(TypedBuffer<OutSampleType> &buffer)
     
     // Determine the channels that need to be copied (union of the channel layouts).
     // Apply the channel mask to prevent crash-causing inputs.
-    Channels channels = (buffer.m_format.channels() & m_format.channels()) & kChannelMask;
+    Channels channels = (buffer.mFormat.channels() & mFormat.channels()) & kChannelMask;
     
     // Number of frames to copy.
     unsigned int length = frames();
@@ -302,10 +303,10 @@ void TypedBuffer<T>::read(TypedBuffer<OutSampleType> &buffer)
     int i = 0;
     while(channels)
     {
-        if( channels & kCanonicalChannels[i] )
+        if( channels & CanonicalChannels::get(i) )
         {
-            SampleFormats::convertMany<T, OutSampleType>(m_ch[i], buffer.m_ch[i], length);
-            channels ^= kCanonicalChannels[i];
+            SampleFormats::convertMany<T, OutSampleType>(mChannels[i], buffer.mChannels[i], length);
+            channels ^= CanonicalChannels::get(i);
         }
         ++i;
     }
@@ -315,17 +316,17 @@ void TypedBuffer<T>::read(TypedBuffer<OutSampleType> &buffer)
 template< typename T >
 void TypedBuffer<T>::read(RawBuffer &buffer) {
     
-    unsigned int length = std::min(buffer.space(), m_wr - m_rd);
+    unsigned int length = std::min(buffer.space(), mWriteIndex - mReadIndex);
     
     // Loop through each channel available in the raw buffer.
     for( uint32_t i = 0; i < buffer.mChannelCount; ++i ){
         
         // Skip the channel if the buffer doesn't support it.
-        if( !(m_format.channels() & buffer.mBuffers[i].mChannel) ) {
+        if( !(mFormat.channels() & buffer.mBuffers[i].mChannel) ) {
             continue;
         }
         
-        T *in = m_ch[CanonicalChannels::indexOf(buffer.mBuffers[i].mChannel)] + m_rd;
+        T *in = mChannels[CanonicalChannels::indexOf(buffer.mBuffers[i].mChannel)] + mReadIndex;
         
         switch (buffer.mFormat) {
             case kInt16: {
@@ -362,7 +363,7 @@ void TypedBuffer<T>::read(RawBuffer &buffer) {
     }
     
     buffer.mWriteIndex += length;
-    m_rd += length;
+    mReadIndex += length;
 }
 
 /* Write(...) Functions */
@@ -371,7 +372,7 @@ template< typename T >
 template< typename InSampleType >
 force_inline void TypedBuffer<T>::writeChannel(Channel ch, T &os, InSampleType is )
 {
-    if( m_format.channels() & ch )
+    if( mFormat.channels() & ch )
         os = SampleFormats::convertSample<InSampleType, T>(is);
 }
 
@@ -379,111 +380,111 @@ template< typename T >
 template< typename InSampleType >
 force_inline void TypedBuffer<T>::write( const Mono<InSampleType> &i )
 {
-    m_ch[0][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FC);
-    ++m_wr;
+    mChannels[0][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FC);
+    ++mWriteIndex;
 }
 
 template< typename T >
 template< typename InSampleType >
 force_inline void TypedBuffer<T>::write( const Stereo<InSampleType> &i )
 {
-    m_ch[0][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FL);
-    m_ch[1][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FR);
-    ++m_wr;
+    mChannels[0][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FL);
+    mChannels[1][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FR);
+    ++mWriteIndex;
 }
 
 template< typename T >
 template< typename InSampleType >
 force_inline void TypedBuffer<T>::write( const Stereo21<InSampleType> &i )
 {
-    m_ch[0][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FL);
-    m_ch[1][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FR);
-    m_ch[3][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.LFE);
-    ++m_wr;
+    mChannels[0][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FL);
+    mChannels[1][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FR);
+    mChannels[3][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.LFE);
+    ++mWriteIndex;
 }
 
 template< typename T >
 template< typename InSampleType >
 force_inline void TypedBuffer<T>::write( const MultiChannel3<InSampleType> &i )
 {
-    m_ch[0][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FL);
-    m_ch[1][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FR);
+    mChannels[0][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FL);
+    mChannels[1][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FR);
     
-    writeChannel(kFrontCenter,     m_ch[2][m_wr], i.FC);
-    writeChannel(kLowFrequencyOne, m_ch[3][m_wr], i.LFE);
-    writeChannel(kBackCenter,      m_ch[8][m_wr], i.BC);
+    writeChannel(kFrontCenter,     mChannels[2][mWriteIndex], i.FC);
+    writeChannel(kLowFrequencyOne, mChannels[3][mWriteIndex], i.LFE);
+    writeChannel(kBackCenter,      mChannels[8][mWriteIndex], i.BC);
 
-    ++m_wr;
+    ++mWriteIndex;
 }
 
 template< typename T >
 template< typename InSampleType >
 force_inline void TypedBuffer<T>::write( const MultiChannel4<InSampleType> &i )
 {
-    m_ch[0][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FL);
-    m_ch[1][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FR);
+    mChannels[0][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FL);
+    mChannels[1][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FR);
     
-    writeChannel(kFrontCenter,     m_ch[2][m_wr], i.FC);
-    writeChannel(kLowFrequencyOne, m_ch[3][m_wr], i.LFE);
-    writeChannel(kBackCenter,      m_ch[8][m_wr], i.BC);
-    writeChannel(kBackLeft,        m_ch[4][m_wr], i.BL);
-    writeChannel(kBackRight,       m_ch[5][m_wr], i.BR);
+    writeChannel(kFrontCenter,     mChannels[2][mWriteIndex], i.FC);
+    writeChannel(kLowFrequencyOne, mChannels[3][mWriteIndex], i.LFE);
+    writeChannel(kBackCenter,      mChannels[8][mWriteIndex], i.BC);
+    writeChannel(kBackLeft,        mChannels[4][mWriteIndex], i.BL);
+    writeChannel(kBackRight,       mChannels[5][mWriteIndex], i.BR);
     
-    ++m_wr;
+    ++mWriteIndex;
 }
 
 template< typename T >
 template< typename InSampleType >
 force_inline void TypedBuffer<T>::write( const MultiChannel5<InSampleType> &i )
 {
-    m_ch[0][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FL);
-    m_ch[1][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FR);
+    mChannels[0][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FL);
+    mChannels[1][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FR);
     
-    writeChannel(kFrontCenter,     m_ch[2][m_wr],  i.FC);
-    writeChannel(kLowFrequencyOne, m_ch[3][m_wr], i.LFE);
-    writeChannel(kBackLeft,        m_ch[4][m_wr],  i.BL);
-    writeChannel(kBackRight,       m_ch[5][m_wr],  i.BR);
-    writeChannel(kSideLeft,        m_ch[9][m_wr],  i.SL);
-    writeChannel(kSideRight,       m_ch[10][m_wr], i.SR);
+    writeChannel(kFrontCenter,     mChannels[2][mWriteIndex],  i.FC);
+    writeChannel(kLowFrequencyOne, mChannels[3][mWriteIndex], i.LFE);
+    writeChannel(kBackLeft,        mChannels[4][mWriteIndex],  i.BL);
+    writeChannel(kBackRight,       mChannels[5][mWriteIndex],  i.BR);
+    writeChannel(kSideLeft,        mChannels[9][mWriteIndex],  i.SL);
+    writeChannel(kSideRight,       mChannels[10][mWriteIndex], i.SR);
 
-    ++m_wr;
+    ++mWriteIndex;
 }
 
 template< typename T >
 template< typename InSampleType >
 force_inline void TypedBuffer<T>::write( const MultiChannel6<InSampleType> &i )
 {
-    m_ch[0][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FL);
-    m_ch[1][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FR);
+    mChannels[0][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FL);
+    mChannels[1][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FR);
     
-    writeChannel(kFrontCenter,     m_ch[2][m_wr],  i.FC);
-    writeChannel(kLowFrequencyOne, m_ch[3][m_wr],  i.LFE);
-    writeChannel(kBackLeft,        m_ch[4][m_wr],  i.BL);
-    writeChannel(kBackRight,       m_ch[5][m_wr],  i.BR);
-    writeChannel(kBackCenter,      m_ch[8][m_wr],  i.BC);
-    writeChannel(kSideLeft,        m_ch[9][m_wr],  i.SL);
-    writeChannel(kSideRight,       m_ch[10][m_wr], i.SR);
+    writeChannel(kFrontCenter,     mChannels[2][mWriteIndex],  i.FC);
+    writeChannel(kLowFrequencyOne, mChannels[3][mWriteIndex],  i.LFE);
+    writeChannel(kBackLeft,        mChannels[4][mWriteIndex],  i.BL);
+    writeChannel(kBackRight,       mChannels[5][mWriteIndex],  i.BR);
+    writeChannel(kBackCenter,      mChannels[8][mWriteIndex],  i.BC);
+    writeChannel(kSideLeft,        mChannels[9][mWriteIndex],  i.SL);
+    writeChannel(kSideRight,       mChannels[10][mWriteIndex], i.SR);
     
-    ++m_wr;
+    ++mWriteIndex;
 }
 
 template< typename T >
 template< typename InSampleType >
 void TypedBuffer<T>::write( const MultiChannel7<InSampleType> &i )
 {
-    m_ch[0][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FL);
-    m_ch[1][m_wr] = SampleFormats::convertSample<InSampleType, T>(i.FR);
+    mChannels[0][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FL);
+    mChannels[1][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FR);
     
-    writeChannel(kFrontCenter,        m_ch[2][m_wr],  i.FC);
-    writeChannel(kLowFrequencyOne,    m_ch[3][m_wr],  i.LFE);
-    writeChannel(kBackLeft,           m_ch[4][m_wr],  i.BL);
-    writeChannel(kBackRight,          m_ch[5][m_wr],  i.BR);
-    writeChannel(kFrontLeftOfCenter,  m_ch[6][m_wr],  i.FLc);
-    writeChannel(kFrontRightOfCenter, m_ch[7][m_wr],  i.FRc);
-    writeChannel(kSideLeft,           m_ch[9][m_wr],  i.SL);
-    writeChannel(kSideRight,          m_ch[10][m_wr], i.SR);
+    writeChannel(kFrontCenter,        mChannels[2][mWriteIndex],  i.FC);
+    writeChannel(kLowFrequencyOne,    mChannels[3][mWriteIndex],  i.LFE);
+    writeChannel(kBackLeft,           mChannels[4][mWriteIndex],  i.BL);
+    writeChannel(kBackRight,          mChannels[5][mWriteIndex],  i.BR);
+    writeChannel(kFrontLeftOfCenter,  mChannels[6][mWriteIndex],  i.FLc);
+    writeChannel(kFrontRightOfCenter, mChannels[7][mWriteIndex],  i.FRc);
+    writeChannel(kSideLeft,           mChannels[9][mWriteIndex],  i.SL);
+    writeChannel(kSideRight,          mChannels[10][mWriteIndex], i.SR);
 
-    ++m_wr;
+    ++mWriteIndex;
 }
 
 template< typename T >
@@ -492,7 +493,7 @@ void TypedBuffer<T>::write(const TypedBuffer<InSampleType> &buffer)
 {
     // Compatability check first. Buffers must be equal length in frames, and sample
     // rate. Required, or else resampling will need to be performed.
-    if((buffer.m_format.sampleRate() != m_format.sampleRate()) ||
+    if((buffer.mFormat.sampleRate() != mFormat.sampleRate()) ||
        (buffer.frames() != frames())
        )
     {
@@ -502,7 +503,7 @@ void TypedBuffer<T>::write(const TypedBuffer<InSampleType> &buffer)
     
     // Determine the channels that need to be copied (union of the channel layouts).
     // Apply the channel mask to prevent crash-causing inputs.
-    Channels channels = (buffer.m_format.channels() & m_format.channels()) & kChannelMask;
+    Channels channels = (buffer.mFormat.channels() & mFormat.channels()) & kChannelMask;
     
     // Number of frames to copy.
     unsigned int length = frames();
@@ -513,10 +514,10 @@ void TypedBuffer<T>::write(const TypedBuffer<InSampleType> &buffer)
     int i = 0;
     while(channels)
     {
-        if( channels & kCanonicalChannels[i] )
+        if( channels & CanonicalChannels::get(i) )
         {
-            SampleFormats::convertMany<InSampleType, T>(buffer.m_ch[i], m_ch[i], length);
-            channels ^= kCanonicalChannels[i];
+            SampleFormats::convertMany<InSampleType, T>(buffer.mChannels[i], mChannels[i], length);
+            channels ^= CanonicalChannels::get(i);
         }
         ++i;
     }
@@ -526,17 +527,17 @@ void TypedBuffer<T>::write(const TypedBuffer<InSampleType> &buffer)
 template< typename T >
 void TypedBuffer<T>::write( RawBuffer &buffer ) {
     
-    unsigned int length = std::min(buffer.available(), frames() - m_wr);
+    unsigned int length = std::min(buffer.available(), frames() - mWriteIndex);
 
     // Loop through each channel available in the raw buffer.
     for( uint32_t i = 0; i < buffer.mChannelCount; ++i ){
         
         // Skip the channel if the buffer doesn't support it.
-        if( !(m_format.channels() & buffer.mBuffers[i].mChannel) ) {
+        if( !(mFormat.channels() & buffer.mBuffers[i].mChannel) ) {
             continue;
         }
         
-        T *out = m_ch[CanonicalChannels::indexOf(buffer.mBuffers[i].mChannel)] + m_wr;
+        T *out = mChannels[CanonicalChannels::indexOf(buffer.mBuffers[i].mChannel)] + mWriteIndex;
         
         switch (buffer.mFormat) {
             case kInt16: {
@@ -569,7 +570,7 @@ void TypedBuffer<T>::write( RawBuffer &buffer ) {
     }
     
     buffer.mReadIndex += length;
-    m_wr += length;
+    mWriteIndex += length;
 }
 
 
