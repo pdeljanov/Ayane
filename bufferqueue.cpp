@@ -1,7 +1,14 @@
+/*
+ *
+ * Copyright (c) 2013 Philip Deljanov. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ *
+ */
+
 #include "bufferqueue.h"
 
 using namespace Stargazer::Audio;
-
 
 BufferQueue::BufferQueue( uint32_t count ) :
 mCount(++count), mWriteIndex(0), mReadIndex(0), mElements(mCount)

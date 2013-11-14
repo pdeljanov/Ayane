@@ -1,3 +1,11 @@
+/*
+ *
+ * Copyright (c) 2013 Philip Deljanov. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ *
+ */
+
 #include "formatmismatchexception.h"
 
 using namespace Stargazer::Audio;
@@ -6,7 +14,6 @@ FormatMismatchException::FormatMismatchException ( const BufferFormat &expected,
     m_expected ( expected ),
     m_received ( received )
 {
-    
 }
 
 const char* FormatMismatchException::what() const throw()

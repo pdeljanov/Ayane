@@ -1,9 +1,11 @@
-/*  Ayane
+/*
  *
- *  Created by Philip Deljanov on 11-10-07.
- *  Copyright 2011 Philip Deljanov. All rights reserved.
+ * Copyright (c) 2013 Philip Deljanov. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
  *
  */
+
 #include "formats.h"
 
 using namespace Stargazer::Audio;

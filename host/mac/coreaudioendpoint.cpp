@@ -1334,8 +1334,17 @@ void CoreAudioEndpoint::process( ProcessIOFlags *ioFlags ){
     
     std::unique_ptr<Buffer> buffer;
 
+    if( !input()->isLinked() ) {
+        std::cout << "CoreAudioEndpoint::process: No source linked to input."
+        << std::endl;
+        
+        return;
+    }
+    
+    Sink::PullResult result = input()->pull(&buffer);
+    
     // May kick off a sink reconfiguration.
-    if( input()->isLinked() && (input()->pull(&buffer) == Sink::kSuccess) ) {
+    if( result == Sink::kSuccess ) {
         
         // Pass ownership of buffer to the queue.
         mBuffers.push(buffer);
@@ -1345,6 +1354,10 @@ void CoreAudioEndpoint::process( ProcessIOFlags *ioFlags ){
         if(!mBuffers.full()) {
             (*ioFlags) |= kProcessMoreHint;
         }
+    }
+    else {
+        std::cout << "CoreAudioEndpoint::process: Pull error (" << result
+        << ")." << std::endl;
     }
     
 }
