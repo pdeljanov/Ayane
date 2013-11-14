@@ -658,7 +658,7 @@ bool CoreAudioEndpoint::stopOutput()
 	if(result != noErr) {
 		return false;
 	}
-	
+
 	return true;
 }
 
@@ -1302,7 +1302,7 @@ bool CoreAudioEndpoint::beginPlayback() {
     // Don't actually start the device till a buffer is received.
     
     // Kick off the clock.
-    mClockPeriod = 1.0;
+    mClockPeriod = 0.250;
     mCurrentClockTick = 0.0;
     mClockProvider.publish(mClockPeriod);
 
@@ -1315,6 +1315,14 @@ bool CoreAudioEndpoint::stoppedPlayback() {
     stopOutput();
     closeOutput();
     
+    // Clear all processed buffers.
+    mBuffers.clear();
+    mAudioBufferListWrapper.reset();
+    mCurrentBuffer.reset();
+    
+    // Reset the sink.
+    input()->reset();
+
     return true;
 }
 
@@ -1325,9 +1333,9 @@ bool CoreAudioEndpoint::stoppedPlayback() {
 void CoreAudioEndpoint::process( ProcessIOFlags *ioFlags ){
     
     std::unique_ptr<Buffer> buffer;
-    
+
     // May kick off a sink reconfiguration.
-    if( input()->pull(&buffer) == Sink::kSuccess ) {
+    if( input()->isLinked() && (input()->pull(&buffer) == Sink::kSuccess) ) {
         
         // Pass ownership of buffer to the queue.
         mBuffers.push(buffer);
@@ -1345,8 +1353,13 @@ void CoreAudioEndpoint::process( ProcessIOFlags *ioFlags ){
     
 }
 
-bool CoreAudioEndpoint::reconfigureSink(const Sink &sink,
-                                        const BufferFormat &format){
+bool CoreAudioEndpoint::reconfigureIO() {
+    std::cout << "CoreAudioEndpoint::reconfigureIO" << std::endl;
+    return true;
+}
+
+bool CoreAudioEndpoint::reconfigureInputFormat(const Sink &sink,
+                                               const BufferFormat &format){
     
     std::cout << "CoreAudioEndpoint::reconfigureSink: Attempting reconfiguration."
     << std::endl;

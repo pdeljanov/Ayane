@@ -62,8 +62,9 @@ namespace Stargazer {
             virtual bool beginPlayback();
             virtual bool stoppedPlayback();
             virtual void process(ProcessIOFlags *ioFlags);
-            virtual bool reconfigureSink(const Sink &sink,
-                                         const BufferFormat &format );
+            virtual bool reconfigureIO();
+            virtual bool reconfigureInputFormat(const Sink &sink,
+                                                const BufferFormat &format );
             
             
             

@@ -83,7 +83,7 @@ TypedBuffer<T>::TypedBuffer( const BufferFormat &format, const BufferLength &len
     Buffer( format, length )
 {
     // Calculate the number of frames in the buffer.
-    unsigned int frames = length.frames ( format.sampleRate() );
+    unsigned int frames = length.frames( format.sampleRate() );
     
     // Calculate the number of actual samples the buffer must store.
     unsigned int samples = frames * format.channelCount();
@@ -539,7 +539,7 @@ void TypedBuffer<T>::write(const TypedBuffer<InSampleType> &buffer)
 template< typename T >
 void TypedBuffer<T>::write( RawBuffer &buffer ) {
     
-    unsigned int length = std::min(buffer.available(), m_length.frames() - m_wr);
+    unsigned int length = std::min(buffer.available(), frames() - m_wr);
 
     // Loop through each channel available in the raw buffer.
     for( int i = 0; i < buffer.mChannelCount; ++i ){

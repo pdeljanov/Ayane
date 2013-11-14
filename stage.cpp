@@ -23,6 +23,13 @@ namespace Stargazer {
             
         };
         
+        class Stage::ReconfigureData {
+            
+        public:
+            State mState;
+        };
+
+        
     }
 }
 
@@ -46,6 +53,27 @@ Stage::~Stage()
     deactivate();
 }
 
+void Stage::syncProcessLoop() {
+    /*
+     *  Unlike the asynchronous processing loop which is directly
+     *  controlled by this Stage, a synchronous process loop is 
+     *  controlled by the upstream sink.  Therefore, before any state
+     *  changes can be made to Stage, the synchronous process loop
+     *  must finish its run. To accomplish this, obtain the state mutex
+     *  lock.
+     */
+    std::lock_guard<std::mutex> lock(mStateMutex);
+    
+    if( mState == kPlaying ) {
+        ProcessIOFlags ioFlags = 0;
+        process(&ioFlags);
+    }
+    else {
+        std::cout << "Stage::syncProcessLoop: Attempted to call "
+        "process on a Stage that is not playing." << std::endl;
+    }
+}
+
 void Stage::asyncProcessLoop()
 {
     bool doBufferRun = false;
@@ -64,8 +92,12 @@ void Stage::asyncProcessLoop()
         ioFlags = 0;
         mBufferQueuesReportedNotFull = 0;
         
-        process(&ioFlags);
-
+        {
+            // Acquire the state lock, and then do a process run.
+            std::lock_guard<std::mutex> lock(mStateMutex);
+            process(&ioFlags);
+        }
+        
         /*
          * Two cases where extra buffering may occur:
          * 1. All sources have reported they can take atleast 1 more buffer.
@@ -144,32 +176,29 @@ bool Stage::shouldRunAsynchronous() const {
     else if( sourceCount() > 1 ) {
         return true;
     }
+    // Only one source, check downstream parameters.
     else
     {
-        for(ConstSourceIterator iter = mSources.begin(), end = mSources.end();
-            iter != end; ++iter)
-        {
-            const Sink *sink = iter->second->mLinkedSink;
-            
-            // Ignore if source is unlinked.
-            if( sink == nullptr ) {
-                continue;
-            }
-            
-            // If a downstream sink forces async operation, use async mode.
-            if(sink->scheduling() == Sink::kForceAsynchronous) {
+        const Source *source = mSources.begin()->second;
+        
+        if( source->isLinked() ) {
+
+            // Check if connected sink is forcing an asynchronous link.
+            if(source->mLinkedSink->scheduling() == Sink::kForceAsynchronous) {
                 
-                std::cout << "Stage::shouldRunAsynchronous: Sink: " << sink
-                << " (on Source: " << iter->first
+                std::cout << "Stage::shouldRunAsynchronous: Sink: "
+                << source->mLinkedSink << " (on Source: " << source
                 << ") forcing asynchronous operation." << std::endl;
                 
                 return true;
             }
             
-            // If a downstream sink has multiple sinks, use async mode.
-            if( sink->mStage->sinkCount() > 1 ) {
+            // If the downstream Stage contains more than one sink, make the
+            // link asynchronous.
+            if( source->mLinkedSink->mStage->sinkCount() > 1 ) {
                 return true;
             }
+            
         }
     }
     
@@ -324,18 +353,97 @@ void Stage::addSink(const std::string &name)
 }
 
 
+
+
+void Stage::beginReconfiguration(ReconfigureData &data) {
+
+    // Lock the state mutex. This will prevent any process() runs.
+    mStateMutex.lock();
+    
+    // Store previous state.
+    data.mState = mState;
+}
+
+void Stage::endReconfiguration(ReconfigureData& data) {
+    
+    // If the previou state was playing, call the online-reconfiguration
+    // handler.
+    if( data.mState == kPlaying ) {
+        reconfigureIO();
+    }
+    
+    // Unlock the state mutex. Process() runs can occur after this.
+    mStateMutex.unlock();
+}
+
+
+
+bool Stage::replace(Source *current, Source *next, Sink *sink) {
+    
+    // Check if trying to replace the current source with itself.
+    if( current == next ) {
+        
+        std::cout << "Stage::replace: Trying to replace source " << current
+        << " with itself on " << sink->mStage << ":" << sink << "."
+        << std::endl;
+        
+        return true;
+    }
+    
+    // Only replace if the ports are linked to each other.
+    if( (current->mLinkedSink == sink) && (sink->mLinkedSource == current) ) {
+
+        ReconfigureData sinkData, currentSourceData, nextSourceData;
+        
+        sink->mStage->beginReconfiguration(sinkData);
+        current->mStage->beginReconfiguration(currentSourceData);
+        next->mStage->beginReconfiguration(nextSourceData);
+
+        // Unlink from current source
+        current->mLinkedSink = nullptr;
+
+        // Link to new source
+        sink->mShared = next->mShared.get();
+        sink->mLinkedSource = next;
+        next->mLinkedSink = sink;
+        
+        next->mStage->endReconfiguration(nextSourceData);
+        sink->mStage->endReconfiguration(sinkData);
+        current->mStage->endReconfiguration(currentSourceData);
+
+        std::cout << "Stage::replace: Relinked: " << next->mStage << ":" << next
+        << " <-----> " << sink->mStage    <<  ":" << sink
+        << " <-/ /-> " << current->mStage <<  ":" << current
+        << std::endl;
+        
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+
 bool Stage::link( Source *source, Sink *sink )
 {
     if( (source->mLinkedSink == nullptr) && (sink->mLinkedSource == nullptr) ) {
         
+        ReconfigureData sinkData, sourceData;
+        
+        sink->mStage->beginReconfiguration(sinkData);
+        source->mStage->beginReconfiguration(sourceData);
+        
+        // Perform link.
         source->mLinkedSink = sink;
         sink->mLinkedSource = source;
-
-        // Link the shared state.
         sink->mShared = source->mShared.get();
         
+        source->mStage->endReconfiguration(sourceData);
+        sink->mStage->endReconfiguration(sinkData);
+        
         std::cout << "Stage::link: Linked: " << source->mStage << ":"
-        << source << " <----> " << sink->mStage <<  ":" << sink << std::endl;
+        << source << " <-----> " << sink->mStage <<  ":" << sink << std::endl;
         
         return true;
     }
@@ -350,16 +458,21 @@ void Stage::unlink( Source *source, Sink *sink )
     // Only unlink if the ports are linked to each other.
     if( (source->mLinkedSink == sink) && (sink->mLinkedSource == source) ) {
 
-        // Stop both the source and sink side stages.
-        source->mStage->stop();
-        sink->mStage->stop();
-
+        ReconfigureData sinkData, sourceData;
+        
+        sink->mStage->beginReconfiguration(sinkData);
+        source->mStage->beginReconfiguration(sourceData);
+        
+        // Unlink
         sink->mShared = nullptr;
         source->mLinkedSink = nullptr;
         sink->mLinkedSource = nullptr;
         
+        source->mStage->endReconfiguration(sourceData);
+        sink->mStage->endReconfiguration(sinkData);
+        
         std::cout << "Stage::unlink: Unlinked: " << source->mStage << ":"
-        << source << " <----> " << sink->mStage <<  ":" << sink << std::endl;
+        << source << " <-/ /-> " << sink->mStage <<  ":" << sink << std::endl;
         
     }
     else {
@@ -472,6 +585,10 @@ Stage::Sink::~Sink() {
     
 }
 
+void Stage::Sink::reset() {
+    mBufferFormat = BufferFormat();
+}
+
 bool Stage::Sink::isLinked() const {
     return !(mLinkedSource == nullptr);
 }
@@ -498,7 +615,7 @@ Stage::Sink::PullResult Stage::Sink::pull( std::unique_ptr<Buffer> *outBuffer )
                 mShared->mPushNotification.wait(lock);
                 
                 // TODO: Very sloppy to reset mPullCancelled here because other
-                // threads theoretically could be waiting here.
+                // threads theoretically could be waiting.
                 if( mPullCancelled ) {
                     mPullCancelled = false;
                     return kCancelled;
@@ -508,8 +625,7 @@ Stage::Sink::PullResult Stage::Sink::pull( std::unique_ptr<Buffer> *outBuffer )
         case kSynchronous: {
             // Generate a buffer only if one isn't already pending.
             if( mShared->mBufferQueue.empty() ) {
-                ProcessIOFlags ioFlags = 0;
-                mLinkedSource->mStage->process(&ioFlags);
+                mLinkedSource->mStage->syncProcessLoop();
             }
         }
     }
@@ -520,7 +636,7 @@ Stage::Sink::PullResult Stage::Sink::pull( std::unique_ptr<Buffer> *outBuffer )
     
     // Check if the buffer's format matches the sink's format.
     if( (*outBuffer)->format() != mBufferFormat ) {
-        if( !mStage->reconfigureSink(*this, (*outBuffer)->format()) ){
+        if( !mStage->reconfigureInputFormat(*this, (*outBuffer)->format()) ){
             return kUnsupportedFormat;
         }
         
@@ -546,7 +662,7 @@ Stage::Sink::PullResult Stage::Sink::tryPull(std::unique_ptr<Buffer> *outBuffer)
     
     // Check if the buffer's format matches the sink's format.
     if( (*outBuffer)->format() != mBufferFormat ) {
-        if( !mStage->reconfigureSink(*this, (*outBuffer)->format()) ){
+        if( !mStage->reconfigureInputFormat(*this, (*outBuffer)->format()) ){
             return kUnsupportedFormat;
         }
         

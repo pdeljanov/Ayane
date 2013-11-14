@@ -14,18 +14,15 @@ ClockObserver::~ClockObserver() {
 }
 
 void ClockObserver::start() {
-    std::cout << "ClockObserver::start: Attempted to start a clock observer. NBD."
-    << std::endl;
+    // ClockObserver is readonly.
 }
 
 void ClockObserver::stop() {
-    std::cout << "ClockObserver::stop: Attempted to stop a clock observer. NBD."
-    << std::endl;
+    // ClockObserver is readonly.
 }
 
 void ClockObserver::reset(double) {
-    std::cout << "ClockObserver::reset: Attempted to reset a clock observer. NBD."
-    << std::endl;
+    // ClockObserver is readonly.
 }
 
 void ClockObserver::advancePresentation(double) {

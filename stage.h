@@ -154,6 +154,11 @@ namespace Stargazer {
                 return mState;
             }
             
+            /**
+             *  Unlinks the current source, from the sink, and replaces it with
+             *  the next source.
+             */
+            static bool replace(Source *current, Source *next, Sink *sink);
 
             /**
              *  Links the specified source and sink together.
@@ -224,6 +229,19 @@ namespace Stargazer {
             virtual void process(ProcessIOFlags *ioFlags) = 0;
             
             /**
+             *  Called by the Stage when source or sink port availability
+             *  changes. Source or sink ports may be linked or unlinked between
+             *  reconfigureIO calls, and therefore this is the correct function
+             *  to probe the number of input and ouputs.
+             *
+             *  This function will only be called after last process() event 
+             *  finishes execution, and blocks any further processing events 
+             *  till completion. As with all Stage callbacks, no synchronization
+             *  is required.
+             */
+            virtual bool reconfigureIO() = 0;
+            
+            /**
              *  Called by the Stage when the buffer format of sink changes.
              *
              *  This function is always called on the processing thread after
@@ -231,8 +249,8 @@ namespace Stargazer {
              *  to the caller.
              *
              */
-            virtual bool reconfigureSink(const Sink &sink,
-                                         const BufferFormat &format ) = 0;
+            virtual bool reconfigureInputFormat(const Sink &sink,
+                                                const BufferFormat &format) = 0;
             
             /** 
              *  Called by the Stage when transitioning from Activated to
@@ -242,12 +260,18 @@ namespace Stargazer {
              *  not guaranteed to be the same. Therefore, beginPlayback is the
              *  ideal callback to probe the stage to determine any necessary
              *  processing parameters.
+             *
+             *  As with all Stage callbacks, no synchronization
+             *  is required.
              */
             virtual bool beginPlayback() = 0;
             
             /** 
              *  Called by the Stage when transitioning from either Paused
              *  or Playing to Stopped.
+             *
+             *  As with all Stage callbacks, no synchronization
+             *  is required.
              */
             virtual bool stoppedPlayback() = 0;
             
@@ -263,6 +287,8 @@ namespace Stargazer {
             
         private:
             
+            class ReconfigureData;
+            
             // Forward declare shared state class for sources and sinks.
             class SourceSinkPrivate;
 
@@ -274,6 +300,9 @@ namespace Stargazer {
             
             /** Asynchronous processing loop. */
             void asyncProcessLoop();
+            
+            /** Synchronous processing loop. */
+            void syncProcessLoop();
             
             /** Stop function without locking. */
             void stopNoLock();
@@ -288,6 +317,10 @@ namespace Stargazer {
             void reportBufferQueueIsNotFull() {
                 ++mBufferQueuesReportedNotFull;
             }
+            
+            void beginReconfiguration( ReconfigureData& );
+            
+            void endReconfiguration( ReconfigureData& );
             
             // State tracking.
             std::mutex mStateMutex;
@@ -431,6 +464,11 @@ namespace Stargazer {
              *  Returns true if the sink is linked to a source, false otherwise.
              */
             bool isLinked() const;
+            
+            /**
+             *  Resets the sink by clearing any saved buffer format.
+             */
+            void reset();
             
             /**
              *  Tests if the buffer format is compatible with the sink.

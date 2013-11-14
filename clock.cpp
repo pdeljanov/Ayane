@@ -28,6 +28,7 @@ void Clock::start() {
     
     //m_updateDelta = 0.0;
     m_started = true;
+    m_cond.notify_all();
 }
 
 void Clock::stop() {
@@ -49,6 +50,7 @@ void Clock::reset( double time ) {
 
 void Clock::advancePresentation(double delta) {
     std::unique_lock<std::mutex> lock(m_mutex);
+
     m_updateDelta = delta;
     m_cond.notify_all();
 }

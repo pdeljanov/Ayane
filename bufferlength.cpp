@@ -30,7 +30,7 @@ double BufferLength::duration ( SampleRate rate ) const
 
 unsigned int BufferLength::frames ( SampleRate rate ) const
 {
-    return ( m_timeBase == Frames ) ? m_frames : ( m_duration / 1000.0f ) * rate;
+    return ( m_timeBase == Frames ) ? m_frames : ( m_duration / 1000.0 ) * rate;
 }
 
 bool BufferLength::isNil() const

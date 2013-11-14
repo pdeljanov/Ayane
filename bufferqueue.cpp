@@ -32,6 +32,8 @@ bool BufferQueue::empty() const {
 void BufferQueue::clear() {
     // TODO: Make safe.
     mElements.clear();
+    mReadIndex = 0;
+    mWriteIndex = 0;
 }
 
 bool BufferQueue::push( std::unique_ptr<Buffer> &inBuffer) {
