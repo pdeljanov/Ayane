@@ -108,6 +108,11 @@ namespace Stargazer
             unsigned int space() const;
             
             /**
+             *  Resets the read and write pointers.
+             */
+            void reset();
+            
+            /**
              *  Returns the buffer format descriptor.
              *
              *  \return The buffer format.
@@ -267,6 +272,7 @@ namespace Stargazer
             
             unsigned int mWriteIndex;
             unsigned int mReadIndex;
+            
         };
 
         
@@ -466,6 +472,7 @@ namespace Stargazer
         typedef TypedBuffer<SampleInt32> Int32Buffer;
         typedef TypedBuffer<SampleFloat32> Float32Buffer;
         typedef TypedBuffer<SampleFloat64> Float64Buffer;
+        
         
     }
     

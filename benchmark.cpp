@@ -10,7 +10,7 @@
 #include "clockprovider.h"
 #include "clockobserver.h"
 #include "bufferfactory.h"
-#include "refcountedpool.h"
+#include "pool.h"
 
 #include <audio/rawbuffer.h>
 #include <audio/stage.h>

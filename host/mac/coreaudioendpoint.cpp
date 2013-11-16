@@ -1332,7 +1332,7 @@ bool CoreAudioEndpoint::stoppedPlayback() {
 
 void CoreAudioEndpoint::process( ProcessIOFlags *ioFlags ){
     
-    std::unique_ptr<Buffer> buffer;
+    ManagedBuffer buffer;
 
     if( !input()->isLinked() ) {
         std::cout << "CoreAudioEndpoint::process: No source linked to input."

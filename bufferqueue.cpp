@@ -43,7 +43,7 @@ void BufferQueue::clear() {
     mWriteIndex = 0;
 }
 
-bool BufferQueue::push( std::unique_ptr<Buffer> &inBuffer) {
+bool BufferQueue::push( ManagedBuffer &inBuffer) {
     
     int writeIndex = mWriteIndex.load(std::memory_order_relaxed);
     int readIndex = mReadIndex.load(std::memory_order_relaxed);
@@ -65,7 +65,7 @@ bool BufferQueue::push( std::unique_ptr<Buffer> &inBuffer) {
     return true;
 }
 
-bool BufferQueue::pop( std::unique_ptr<Buffer> *outBuffer) {
+bool BufferQueue::pop( ManagedBuffer *outBuffer) {
     
     int writeIndex = mWriteIndex.load(std::memory_order_relaxed);
     int readIndex = mReadIndex.load(std::memory_order_relaxed);

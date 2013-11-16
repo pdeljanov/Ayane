@@ -67,11 +67,11 @@ set( audio_SRCS
 	bufferframes.cpp
 	bufferformat.cpp
 	bufferlength.cpp
+    bufferpool.cpp
 	bufferqueue.cpp
 	clock.cpp
 	clockobserver.cpp
 	clockprovider.cpp
-	refcountedpool.cpp
 	channels.cpp
 	duration.cpp
 	formats.cpp
@@ -89,11 +89,11 @@ set( audio_HDRS
 	bufferframes.h
 	bufferformat.h
 	bufferlength.h
+    bufferpool.h
 	bufferqueue.h
 	clock.h
 	clockobserver.h
 	clockprovider.h
-	refcountedpool.h
 	channels.h
 	duration.h
 	formats.h

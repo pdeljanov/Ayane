@@ -205,12 +205,12 @@ namespace Stargazer
             // Format descriptor table.
             static constexpr Descriptor descriptorTable[] =
             {
-                { "uint8"  , sizeof(SampleUInt8)  , 1,  8 },
-                { "int16"  , sizeof(SampleInt16)  , 2, 16 },
-                { "int24"  , sizeof(SampleInt24)  , 3, 24 },
-                { "int32"  , sizeof(SampleInt32)  , 4, 32 },
-                { "float32", sizeof(SampleFloat32), 4, 32 },
-                { "float64", sizeof(SampleFloat64), 8, 64 }
+                { "UInt8"  , sizeof(SampleUInt8)  , 1,  8 },
+                { "Int16"  , sizeof(SampleInt16)  , 2, 16 },
+                { "Int24"  , sizeof(SampleInt24)  , 3, 24 },
+                { "Int32"  , sizeof(SampleInt32)  , 4, 32 },
+                { "Float32", sizeof(SampleFloat32), 4, 32 },
+                { "Float64", sizeof(SampleFloat64), 8, 64 }
             };
             
             

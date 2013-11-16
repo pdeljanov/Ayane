@@ -133,7 +133,7 @@ namespace Stargazer {
             BufferQueue mBuffers;
             
             std::unique_ptr<RawBuffer> mAudioBufferListWrapper;
-            std::unique_ptr<Buffer> mCurrentBuffer;
+            ManagedBuffer mCurrentBuffer;
             
             
             

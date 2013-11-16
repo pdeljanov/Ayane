@@ -66,6 +66,13 @@ unsigned int Buffer::space() const {
     return frames() - mWriteIndex;
 }
 
+void Buffer::reset() {
+    mWriteIndex = 0;
+    mReadIndex = 0;
+    mFlags = kNone;
+    mTimestamp = 0;
+}
+
 template<typename T>
 TypedBuffer<T>::TypedBuffer( const BufferFormat &format, const BufferLength &length ) :
     Buffer( format, length )

@@ -7,3 +7,27 @@
  */
 
 #include "pipeline.h"
+
+using namespace Stargazer::Audio;
+
+namespace Stargazer {
+    namespace Audio {
+        
+        class PipelinePrivate {
+        public:
+            
+            
+        };
+        
+    }
+}
+
+Pipeline::Pipeline() : d_ptr(new PipelinePrivate)
+{
+    
+}
+
+Pipeline::~Pipeline()
+{
+    delete d_ptr;
+}

@@ -11,7 +11,7 @@
 
 #include <stddef.h>
 
-#include "buffer.h"
+#include "bufferpool.h"
 
 #include <vector>
 #include <memory>
@@ -28,8 +28,8 @@ namespace Stargazer {
             BufferQueue( uint32_t count );
             ~BufferQueue();
 
-            bool push ( std::unique_ptr<Buffer> &inBuffer );
-            bool pop ( std::unique_ptr<Buffer> *outBuffer );
+            bool push ( ManagedBuffer &inBuffer );
+            bool pop ( ManagedBuffer *outBuffer );
             
             uint32_t capacity() const;
             
@@ -48,7 +48,7 @@ namespace Stargazer {
 
             // Dynamic elements array, initialized to the exact size in the
             // initialization list.
-            std::vector<std::unique_ptr<Buffer>> mElements;
+            std::vector<ManagedBuffer> mElements;
         };
         
         

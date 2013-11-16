@@ -110,6 +110,8 @@ void Stage::asyncProcessLoop()
             // Acquire the state lock, and then do a process run.
             std::lock_guard<std::mutex> lock(mStateMutex);
 
+            
+            
             // Cancellation flag?
             process(&ioFlags);
         }
@@ -565,7 +567,7 @@ bool Stage::Source::checkFormatSupport(const BufferFormat &format) const
     return false;
 }
 
-void Stage::Source::push(std::unique_ptr<Buffer> &buffer)
+void Stage::Source::push(ManagedBuffer &buffer)
 {
     if( !mShared->mBufferQueue.push(buffer) ) {
         // Buffer couldn't be inserted due to the queue being full. This should
@@ -635,7 +637,7 @@ bool Stage::Sink::checkFormatSupport( const BufferFormat &format ) const
     return true;
 }
 
-Stage::Sink::PullResult Stage::Sink::pull( std::unique_ptr<Buffer> *outBuffer )
+Stage::Sink::PullResult Stage::Sink::pull( ManagedBuffer *outBuffer )
 {
     switch(mShared->mLinkSynchronicity) {
         case kAsynchronous: {
@@ -677,7 +679,7 @@ Stage::Sink::PullResult Stage::Sink::pull( std::unique_ptr<Buffer> *outBuffer )
     return kSuccess;
 }
 
-Stage::Sink::PullResult Stage::Sink::tryPull(std::unique_ptr<Buffer> *outBuffer) {
+Stage::Sink::PullResult Stage::Sink::tryPull(ManagedBuffer *outBuffer) {
     
     if( mShared->mLinkSynchronicity == kAsynchronous ) {
         if( !mShared->mBufferQueue.pop(outBuffer) ) {

@@ -12,6 +12,7 @@
 // No one knows the names of the trampled flowers.
 // Fallen birds await the next wind before they try again.
 
+#include "bufferpool.h"
 #include "bufferqueue.h"
 #include "clock.h"
 
@@ -370,7 +371,7 @@ namespace Stargazer {
              *  Attempts to push buffer to the source. If the source buffer
              *  queue is full, this function will drop the buffer.
              */
-            void push( std::unique_ptr<Buffer> &buffer );
+            void push( ManagedBuffer &buffer );
             
             /**
              *  Resets the source by clearing all pending buffers.
@@ -491,14 +492,14 @@ namespace Stargazer {
              *  may be a different format between successive calls, but the sink
              *  will issue a port-specific reconfigureSink() event.
              */
-            PullResult pull( std::unique_ptr<Buffer> *outBuffer );
+            PullResult pull( ManagedBuffer *outBuffer );
             
             /**
              *  Attempts to pull a buffer from the linked source. This
              *  function will never block, but it may not always return a
              *  buffer.
              */
-            PullResult tryPull( std::unique_ptr<Buffer> *outBuffer );
+            PullResult tryPull( ManagedBuffer *outBuffer );
             
             /**
              *  Cancels any waiting pulls.
