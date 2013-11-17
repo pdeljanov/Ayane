@@ -425,8 +425,8 @@ bool Stage::replace(Source *current, Source *next, Sink *sink) {
         current->mStage->endReconfiguration(currentSourceData);
 
         INFO("Stage::replace") << "Relinked: " << next->mStage << ":" << next
-        << " <-----> " << sink->mStage    <<  ":" << sink
-        << " <-/ /-> " << current->mStage <<  ":" << current
+        << " +-----> " << sink->mStage    <<  ":" << sink
+        << " <-/ /-+ " << current->mStage <<  ":" << current
         << std::endl;
         
         return true;
@@ -461,7 +461,7 @@ bool Stage::link( Source *source, Sink *sink )
         sink->mStage->endReconfiguration(sinkData);
         
         INFO("Stage::link") << "Linked: " << source->mStage << ":"
-        << source << " <-----> " << sink->mStage <<  ":" << sink << std::endl;
+        << source << " +-----> " << sink->mStage <<  ":" << sink << std::endl;
         
         return true;
     }
@@ -495,7 +495,7 @@ void Stage::unlink( Source *source, Sink *sink )
         sink->mStage->endReconfiguration(sinkData);
         
         INFO("Stage::unlink") << "Unlinked: " << source->mStage << ":"
-        << source << " <-/ /-> " << sink->mStage <<  ":" << sink << std::endl;
+        << source << " +-/ /-> " << sink->mStage <<  ":" << sink << std::endl;
         
     }
     else {

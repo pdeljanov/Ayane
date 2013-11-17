@@ -203,6 +203,7 @@ namespace Stargazer
         private:
         
             // Format descriptor table.
+            // Printable Name, In Memory Size, Actual Size (bytes), Bit Width
             static constexpr Descriptor descriptorTable[] =
             {
                 { "UInt8"  , sizeof(SampleUInt8)  , 1,  8 },

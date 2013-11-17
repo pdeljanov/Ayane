@@ -12,6 +12,9 @@
 
 using namespace Stargazer::Audio;
 
+// Allow compiler flag to disable ANSI colour coding.
+#ifndef STARGAZER_TRACE_NO_ANSI
+
 #define ANSI_BOLD "\033[1m"
 
 #define ANSI_BLACK "\033[30m"
@@ -21,9 +24,26 @@ using namespace Stargazer::Audio;
 #define ANSI_BLUE "\033[34m"
 #define ANSI_MAGENTA "\033[35m"
 #define ANSI_CYAN "\033[36m"
-#define ANSI_WHITE "\033[37"
+#define ANSI_WHITE "\033[37m"
 
 #define ANSI_COLOUR_END "\033[39m"
+
+#else
+
+#define ANSI_BOLD ""
+
+#define ANSI_BLACK ""
+#define ANSI_RED ""
+#define ANSI_GREEN ""
+#define ANSI_YELLOW ""
+#define ANSI_BLUE ""
+#define ANSI_MAGENTA ""
+#define ANSI_CYAN ""
+#define ANSI_WHITE ""
+
+#define ANSI_COLOUR_END ""
+
+#endif
 
 class NullOutputBuffer : public std::streambuf {
 public:
@@ -76,7 +96,7 @@ std::ostream &Trace::trace(const char *signature) {
 
 std::ostream &Trace::trace(const char *signature, const void *instance) {
     if(mMaximumPriority >= kTrace){
-        std::cout << ANSI_GREEN << "(" << instance << ") " << signature << ": " ANSI_COLOUR_END;
+        std::cout << ANSI_GREEN "(" << instance << ") " << signature << ": " ANSI_COLOUR_END;
         return std::cout;
     }
     else {
@@ -99,7 +119,7 @@ std::ostream &Trace::info(const char *signature) {
 std::ostream &Trace::info(const char *signature, const void *instance) {
     if(mMaximumPriority >= kInfo){
         
-        std::cout << ANSI_CYAN << "(" << instance << ") " << signature << ": " ANSI_COLOUR_END;
+        std::cout << ANSI_CYAN "(" << instance << ") " << signature << ": " ANSI_COLOUR_END;
         return std::cout;
     }
     else {
@@ -122,7 +142,7 @@ std::ostream &Trace::notice(const char *signature){
 std::ostream &Trace::notice(const char *signature, const void *instance){
     if(mMaximumPriority >= kNotice){
         
-        std::cout << ANSI_BLUE << "(" << instance << ") " << signature << ": " ANSI_COLOUR_END;
+        std::cout << ANSI_BLUE "(" << instance << ") " << signature << ": " ANSI_COLOUR_END;
         return std::cout;
     }
     else {
@@ -145,7 +165,7 @@ std::ostream &Trace::warning(const char *signature){
 std::ostream &Trace::warning(const char *signature, const void *instance){
     if(mMaximumPriority >= kWarning){
         
-        std::cout << ANSI_YELLOW << "(" << instance << ") " << signature << ": " ANSI_COLOUR_END;
+        std::cout << ANSI_YELLOW "(" << instance << ") " << signature << ": " ANSI_COLOUR_END;
         return std::cout;
     }
     else {
@@ -168,7 +188,7 @@ std::ostream &Trace::error(const char *signature){
 
 std::ostream &Trace::error(const char *signature, const void *instance){
     if(mMaximumPriority >= kError){
-        std::cout << ANSI_RED << "(" << instance << ") " << signature << ": " ANSI_COLOUR_END;
+        std::cout << ANSI_RED "(" << instance << ") " << signature << ": " ANSI_COLOUR_END;
         return std::cout;
     }
     else {

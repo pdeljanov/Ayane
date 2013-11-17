@@ -9,6 +9,7 @@
 #ifndef STARGAZER_STDLIB_AUDIO_CHANNELS_H_
 #define STARGAZER_STDLIB_AUDIO_CHANNELS_H_
 
+#include <core/attributes.h>
 #include <core/macros.h>
 #include <cstdint>
 
@@ -177,14 +178,14 @@ namespace Stargazer
             /**
              *  Gets the canonical index of a channel.
              */
-            static inline int indexOf( Channel name ) {
+            static force_inline int indexOf( Channel name ) {
                 return __builtin_ctz(name);
             }
             
             /**
              *  Gets the channels from the canonical index.
              */
-            static inline Channel get(int index) {
+            static force_inline Channel get(int index) {
                 return kCanonicalChannels[index];
             }
             

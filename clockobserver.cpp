@@ -7,11 +7,9 @@
  */
 
 #include "clockobserver.h"
-
-#include <iostream>
+#include "trace.h"
 
 using namespace Stargazer::Audio;
-
 
 ClockObserver::ClockObserver( Clock *source ) : mClock(source) {
     
@@ -34,11 +32,11 @@ void ClockObserver::reset(double) {
 }
 
 void ClockObserver::advancePresentation(double) {
-    std::cout << "ClockObserver::advancePresentation: Attempted to advance a "
-    "clock observer. Umm?" << std::endl;
+    NOTICE_THIS("ClockObserver::advancePresentation")
+    << "Attempted to advance a clock observer." << std::endl;
 }
 
 void ClockObserver::advancePipeline(double) {
-    std::cout << "ClockObserver::advancePipeline: Attempted to advance a clock "
-    "observer. Umm?" << std::endl;
+    NOTICE_THIS("ClockObserver::advancePipeline")
+    << "Attempted to advance a clock observer." << std::endl;
 }

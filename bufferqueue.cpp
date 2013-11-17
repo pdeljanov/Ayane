@@ -8,8 +8,6 @@
 
 #include "bufferqueue.h"
 
-#include <iostream>
-
 using namespace Stargazer::Audio;
 
 BufferQueue::BufferQueue( uint32_t count ) :

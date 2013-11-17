@@ -11,7 +11,6 @@
 
 #include <core/alignedmemory.h>
 
-#include <iostream>
 #include <algorithm>
 
 using namespace Stargazer::Audio;

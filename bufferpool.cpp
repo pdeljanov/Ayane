@@ -8,8 +8,6 @@
 
 #include "bufferpool.h"
 
-#include <iostream>
-
 using namespace Stargazer::Audio;
 
 ManagedBufferDeallocator::ManagedBufferDeallocator(){

@@ -9,9 +9,16 @@
 #ifndef STARGAZER_STDLIB_AUDIO_TRACE_H_
 #define STARGAZER_STDLIB_AUDIO_TRACE_H_
 
-#include <mutex>
+#include <core/macros.h>
 #include <ostream>
 
+#if defined(DEBUG)
+/** Executes a statement only in debug mode. */
+#define DEBUG_ONLY(statement) statement
+#else
+/** Executes a statement only in debug mode. */
+#define DEBUG_ONLY(statement) ((void)0)
+#endif
 
 #define ERROR(signature)        Stargazer::Audio::Trace::instance().error(signature)
 #define ERROR_THIS(signature)   Stargazer::Audio::Trace::instance().error(signature, this)
@@ -41,21 +48,36 @@ namespace Stargazer {
                 return trace;
             }
             
+            /** 
+             *  Enumeration of priority levels that control what messages types
+             *  will be printed.
+             */
             typedef enum {
+                
+                /** No messages are printed. */
                 kNone = 0,
+                
+                /** Error messages are printed. */
                 kError,
+                
+                /** Error and warning messages are printed. */
                 kWarning,
+                
+                /** Error, Warning, and Notice messages are printed. */
                 kNotice,
+                
+                /** Error, Warning, Notice, and Info messages are printed. */
                 kInfo,
+                
+                /** Error, Warning, Notice, Info and Trace messages are printed. */
                 kTrace
+                
             } Priority;
             
-            Trace();
             ~Trace();
             
             Priority priority() const;
             void setPriority(Priority priority);
-            
             
             std::ostream &trace(const char *signature);
             std::ostream &info(const char *signature);
@@ -71,6 +93,8 @@ namespace Stargazer {
             
             
         private:
+            STARGAZER_DISALLOW_DEFAULT_CTOR_COPY_AND_ASSIGN(Trace);
+
             Priority mMaximumPriority;
         };
         

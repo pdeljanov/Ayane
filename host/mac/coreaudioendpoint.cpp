@@ -1341,7 +1341,7 @@ bool CoreAudioEndpoint::setAUOutputChannelLayout(AudioChannelLayout *channelLayo
         
 		for(UInt32 i = 0; i < channelCount; ++i) {
 			TRACE_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
-            << i << " -> " << channelMap.get()[i] << std::endl;
+            << "  " << i << " -> " << channelMap.get()[i] << std::endl;
         }
         
 		// Set the channel map
@@ -1361,20 +1361,6 @@ bool CoreAudioEndpoint::setAUOutputChannelLayout(AudioChannelLayout *channelLayo
     
     return true;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 AudioBufferList * CoreAudioEndpoint::allocateABL(UInt32 channelsPerFrame,
                                                  UInt32 bytesPerSample,
@@ -1400,11 +1386,6 @@ AudioBufferList * CoreAudioEndpoint::allocateABL(UInt32 channelsPerFrame,
     
     return abl;
 }
-
-
-
-
-
 
 
 Stage::Sink *CoreAudioEndpoint::input()
@@ -1609,7 +1590,7 @@ bool CoreAudioEndpoint::reconfigureInputFormat(const Sink &sink,
     }
 
     TRACE_THIS("CoreAudioEndpoint::reconfigureSink")
-    << "Reconfiguration successful. SampleRate="
+    << "Reconfiguration successful. "
     << format.sampleRate() << "Hz, Channels="
     << format.channelCount() << ", ChannelLayout="
     << std::hex << std::showbase << format.channels()
