@@ -285,8 +285,8 @@ namespace Stargazer
             
         public:
          
-            TypedBuffer( const BufferFormat &format, const BufferLength &length );
-            ~TypedBuffer();
+            TypedBuffer(const BufferFormat &format, const BufferLength &length);
+            virtual ~TypedBuffer();
             
             virtual SampleFormat sampleFormat() const;
             

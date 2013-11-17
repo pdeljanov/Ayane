@@ -20,7 +20,6 @@
 #include <mutex>
 #include <thread>
 #include <string>
-#include <queue>
 #include <unordered_map>
 
 namespace Stargazer {
@@ -39,10 +38,10 @@ namespace Stargazer {
 
             
             /** Collection type for sources. */
-            typedef std::unordered_map<std::string, Source*> SourceCollection;
+            typedef std::unordered_map<std::string, std::unique_ptr<Source>> SourceCollection;
             
             /** Collection type for sinks. */
-            typedef std::unordered_map<std::string, Sink*> SinkCollection;
+            typedef std::unordered_map<std::string, std::unique_ptr<Sink>> SinkCollection;
 
             typedef SourceCollection::iterator SourceIterator;
             typedef SourceCollection::const_iterator ConstSourceIterator;

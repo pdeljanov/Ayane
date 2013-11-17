@@ -10,8 +10,8 @@
 #include "clockprovider.h"
 #include "clockobserver.h"
 #include "bufferfactory.h"
-#include "pool.h"
 
+#include <audio/trace.h>
 #include <audio/rawbuffer.h>
 #include <audio/stage.h>
 #include <audio/host/mac/coreaudioendpoint.h>
@@ -23,7 +23,6 @@
 
 #include <mutex>
 
-#define NUMBER_OF_ELEMENTS 1920000
 
 class Stopwatch {
 public:
@@ -61,11 +60,12 @@ float *podSrc;
 float *podDest;
 
 #define IGNORE_FIRST 2
-#define NUM_CHANNELS 2
+#define NUM_CHANNELS 8
+#define NUMBER_OF_ELEMENTS 48000
 
 int benchmark()
 {
-    BufferFormat format( kStereo20, 48000 );
+    BufferFormat format( kSurround71, NUMBER_OF_ELEMENTS );
     BufferLength length( (unsigned int)NUMBER_OF_ELEMENTS );
     
     Stereo<SampleFloat32> f;
@@ -354,7 +354,7 @@ int main(int argc, const char *argv[] )
 {
 #pragma unused(argc)
 #pragma unused(argv)
-    
+
 /*
     // Will be done by pipeline.
     std::unique_ptr<ClockProvider> cp( new ClockProvider() );
@@ -410,31 +410,12 @@ int main(int argc, const char *argv[] )
     
     
     
-    
+    ERROR("MyClass::MyFunction")    << "Error";
+    WARNING("MyClass::MyFunction")  << "Warning";
+    NOTICE("MyClass::MyFunction")   << "Notice";
+    INFO("MyClass::MyFunction")     << "Info";
+    TRACE("MyClass::MyFunction")    << "Trace";
 
-    RawBuffer *rb = new RawBuffer(240, 2, kInt16, true);
-    rb->mBuffers[0].mBuffer = kSineWave;
-    rb->mBuffers[0].mChannel = kFrontRight;
-    
-    rb->mBuffers[0].mBuffer = kSineWave;
-    rb->mBuffers[0].mChannel = kFrontLeft;
-    
-
-    BufferFormat format( kStereo21, 512 );
-    BufferLength length( (unsigned int)512 );
-    
-    Int16Buffer *b = new Int16Buffer(format, length);
-    
-    *b << *rb;
-    *b << *rb;
-        
-    
-    while(true){
-        char c;
-        std::cin >> c;
-    }
-
-    
 }
 
 

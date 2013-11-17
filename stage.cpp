@@ -7,8 +7,7 @@
  */
 
 #include "stage.h"
-
-#include <iostream>
+#include "trace.h"
 
 namespace Stargazer {
     namespace Audio  {
@@ -65,6 +64,11 @@ Stage::~Stage()
 {
     // Stage was "killed"
     deactivate();
+    
+    // Clear the sources and sinks before Stage calls the destructors on its
+    // member. This allows the sources and sinks to unlink themselves.
+    mSources.clear();
+    mSinks.clear();
 }
 
 void Stage::syncProcessLoop() {
@@ -83,8 +87,8 @@ void Stage::syncProcessLoop() {
         process(&ioFlags);
     }
     else {
-        std::cout << "Stage::syncProcessLoop: Attempted to call "
-        "process() on a Stage that is not playing." << std::endl;
+        NOTICE_THIS("Stage::syncProcessLoop") << "Attempted to call process() "
+        "on a Stage that is not playing." << std::endl;
     }
 }
 
@@ -96,12 +100,6 @@ void Stage::asyncProcessLoop()
 
     
     while(doBufferRun || mClock->wait()) {
-
-        /*
-        std::cout << "Stage::asyncProcessLoop: "
-        << (doBufferRun ? "Buffered" : "Clocked") << " run."
-        << std::endl;
-        */
         
         ioFlags = 0;
         mBufferQueuesReportedNotFull = 0;
@@ -109,8 +107,6 @@ void Stage::asyncProcessLoop()
         {
             // Acquire the state lock, and then do a process run.
             std::lock_guard<std::mutex> lock(mStateMutex);
-
-            
             
             // Cancellation flag?
             process(&ioFlags);
@@ -127,8 +123,8 @@ void Stage::asyncProcessLoop()
 
     }
 
-    std::cout << "Stage::asyncProcessLoop: Processing thread with ID: "
-    << mProcessingThread.get_id() << " done." << std::endl;
+    INFO_THIS("Stage::asyncProcessLoop") << "Asynchronous processing thread "
+    << std::this_thread::get_id() << " exiting." << std::endl;
 }
 
 void Stage::startAsyncProcess()
@@ -139,13 +135,13 @@ void Stage::startAsyncProcess()
         mClock->start();
         mProcessingThread = std::thread( &Stage::asyncProcessLoop, this );
         
-        std::cout << "Stage::startAsyncProcess: Started thread with ID: "
-        << mProcessingThread.get_id() << "." << std::endl;
+        INFO_THIS("Stage::startAsyncProcess") << "Started asynchronous "
+        "processing thread " << mProcessingThread.get_id() << "." << std::endl;
     }
     else
     {
-        std::cout << "Stage::startAsyncProcess: Thread already started with ID: "
-        << mProcessingThread.get_id() << "." << std::endl;
+        NOTICE_THIS("Stage::startAsyncProcess") << "Asynchronous processing "
+        "thread already started." << std::endl;
     }
 
 }
@@ -154,15 +150,12 @@ void Stage::stopAsyncProcess()
 {
     if( mProcessingThread.joinable() ){
         
-        std::cout << "Stage::stopAsyncProcess: Waiting for processing thread to"
-        " stop." << std::endl;
-        
+        TRACE_THIS("Stage::stopAsyncProcess") << "Waiting for asynchronous "
+        "processing thread to stop." << std::endl;
+                
         // Stop the clock. Processing thread will exit
         mClock->stop();
         mProcessingThread.join();
-        
-        std::cout << "Stage::stopAsyncProcess: Processing thread stopped."
-        << std::endl;
     }
 }
 
@@ -197,14 +190,14 @@ bool Stage::shouldRunAsynchronous() const {
     // Only one source, check downstream parameters.
     else
     {
-        const Source *source = mSources.begin()->second;
+        const Source *source = mSources.begin()->second.get();
         
         if( source->isLinked() ) {
 
             // Check if connected sink is forcing an asynchronous link.
             if(source->mLinkedSink->scheduling() == Sink::kForceAsynchronous) {
                 
-                std::cout << "Stage::shouldRunAsynchronous: Sink: "
+                INFO_THIS("Stage::shouldRunAsynchronous") << "Sink: "
                 << source->mLinkedSink << " (on Source: " << source
                 << ") forcing asynchronous operation." << std::endl;
                 
@@ -234,8 +227,7 @@ bool Stage::activate()
         // Switch state to activated.
         mState = kActivated;
         
-        std::cout << "Stage::activate: Stage (" << this << ") activated."
-        << std::endl;
+        INFO_THIS("Stage::activate") << "Activated." << std::endl;
         
         return true;
     }
@@ -266,8 +258,7 @@ void Stage::deactivate()
         // Record state.
         mState = kDeactivated;
         
-        std::cout << "Stage::deactivate: Stage (" << this << ") deactivated."
-        << std::endl;
+        INFO_THIS("Stage::deactivate") << "Deactivated." << std::endl;
     }
 }
 
@@ -284,7 +275,7 @@ void Stage::play( AbstractClock *clock )
         // Determine synchronicity.
         mAsynchronousProcessing = shouldRunAsynchronous();
         
-        std::cout << "Stage::play: Stage (" << this << ") will run "
+        TRACE_THIS("Stage::play") << "Stage will run "
         << (mAsynchronousProcessing ? "asynchronously." : "synchronously.")
         << std::endl;
         
@@ -312,8 +303,7 @@ void Stage::play( AbstractClock *clock )
         // Record the state.
         mState = kPlaying;
         
-        std::cout << "Stage::play: Stage (" << this << ") playing."
-        << std::endl;
+        INFO_THIS("Stage::play") << "Playing." << std::endl;
     }
     
 }
@@ -351,10 +341,10 @@ void Stage::stopNoLock()
 void Stage::addSource(const std::string &name)
 {
     if( mState == kDeactivated ){
-        mSources.insert( std::make_pair(name, new Source(this)) );
+        mSources.insert( std::make_pair(name, std::unique_ptr<Source>(new Source(this))) );
     }
     else {
-        std::cout << "Stage::addSource: Can't add source unless stage is "
+        NOTICE_THIS("Stage::addSource") << "Can't add source unless stage is "
         "deactivated." << std::endl;
     }
 }
@@ -362,10 +352,10 @@ void Stage::addSource(const std::string &name)
 void Stage::addSink(const std::string &name)
 {
     if( mState == kDeactivated ) {
-        mSinks.insert( std::make_pair(name, new Sink(this)) );
+        mSinks.insert( std::make_pair(name, std::unique_ptr<Sink>(new Sink(this))) );
     }
     else {
-        std::cout << "Stage::addSink: Can't add sink unless stage is "
+        NOTICE_THIS("Stage::addSink") << "Can't add sink unless stage is "
         "deactivated." << std::endl;
     }
 }
@@ -406,7 +396,7 @@ bool Stage::replace(Source *current, Source *next, Sink *sink) {
     // Check if trying to replace the current source with itself.
     if( current == next ) {
         
-        std::cout << "Stage::replace: Trying to replace source " << current
+        NOTICE("Stage::replace") << "Trying to replace source " << current
         << " with itself on " << sink->mStage << ":" << sink << "."
         << std::endl;
         
@@ -434,7 +424,7 @@ bool Stage::replace(Source *current, Source *next, Sink *sink) {
         sink->mStage->endReconfiguration(sinkData);
         current->mStage->endReconfiguration(currentSourceData);
 
-        std::cout << "Stage::replace: Relinked: " << next->mStage << ":" << next
+        INFO("Stage::replace") << "Relinked: " << next->mStage << ":" << next
         << " <-----> " << sink->mStage    <<  ":" << sink
         << " <-/ /-> " << current->mStage <<  ":" << current
         << std::endl;
@@ -470,13 +460,13 @@ bool Stage::link( Source *source, Sink *sink )
         source->mStage->endReconfiguration(sourceData);
         sink->mStage->endReconfiguration(sinkData);
         
-        std::cout << "Stage::link: Linked: " << source->mStage << ":"
+        INFO("Stage::link") << "Linked: " << source->mStage << ":"
         << source << " <-----> " << sink->mStage <<  ":" << sink << std::endl;
         
         return true;
     }
     else {
-        std::cout << "Stage::link: Source or sink already linked." << std::endl;
+        NOTICE("Stage::link") << "Source or sink already linked." << std::endl;
         return false;
     }
 }
@@ -504,12 +494,12 @@ void Stage::unlink( Source *source, Sink *sink )
         source->mStage->endReconfiguration(sourceData);
         sink->mStage->endReconfiguration(sinkData);
         
-        std::cout << "Stage::unlink: Unlinked: " << source->mStage << ":"
+        INFO("Stage::unlink") << "Unlinked: " << source->mStage << ":"
         << source << " <-/ /-> " << sink->mStage <<  ":" << sink << std::endl;
         
     }
     else {
-        std::cout << "Stage::unlink: Source: " << source << " not linked to "
+        NOTICE("Stage::unlink") << "Source: " << source << " not linked to "
         "sink: " << sink << std::endl;
     }
 }
@@ -545,9 +535,7 @@ Stage::Source::~Source() {
     if( isLinked() ){
         Stage::unlink(this, mLinkedSink);
     }
-    
-    // Resets the buffer queue.
-    reset();
+
 }
 
 bool Stage::Source::isLinked() const {
@@ -572,7 +560,7 @@ void Stage::Source::push(ManagedBuffer &buffer)
     if( !mShared->mBufferQueue.push(buffer) ) {
         // Buffer couldn't be inserted due to the queue being full. This should
         // not happen unless the downstream sink isn't working properly.
-        std::cout << "Stage::Source::push: Failed to push buffer." << std::endl;
+        WARNING_THIS("Stage::Source::push") << "Failed to push buffer." << std::endl;
         return;
     }
     

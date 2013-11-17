@@ -23,12 +23,9 @@ ManagedBufferDeallocator::ManagedBufferDeallocator(std::weak_ptr<ManagedBufferOw
 
 void ManagedBufferDeallocator::operator()(Buffer *buffer) {
     
-    if( mOwner.expired() ) {
-        delete buffer;
-        return;
-    }
-    
-    if( std::shared_ptr<ManagedBufferOwner> owner = mOwner.lock() ) {
+    if(std::shared_ptr<ManagedBufferOwner> owner = mOwner.lock()) {
+        // Reset the buffer, then try to get the owner to reclaim it.
+        buffer->reset();
         owner->reclaim(buffer);
     }
     else {
@@ -46,7 +43,6 @@ mBufferLength(bufferLength)
 }
 
 BufferPoolPrivate::~BufferPoolPrivate(){
-    
 }
 
 void BufferPoolPrivate::setBufferTemplate(SampleFormat format,
@@ -58,6 +54,14 @@ void BufferPoolPrivate::setBufferTemplate(SampleFormat format,
     mSampleFormat = format;
     mBufferFormat = bufferFormat;
     mBufferLength = bufferLength;
+    
+    // Clear the pool of old buffer types.
+    std::stack<ManagedBuffer>().swap(mPool);
+}
+
+void BufferPoolPrivate::clear() {
+    std::lock_guard<std::mutex> lock(mPoolMutex);
+    std::stack<ManagedBuffer>().swap(mPool);
 }
 
 ManagedBuffer BufferPoolPrivate::acquire() {
@@ -66,7 +70,7 @@ ManagedBuffer BufferPoolPrivate::acquire() {
 
     ManagedBuffer buffer;
     
-    if( mPool.empty() )
+    if(mPool.empty())
     {
         Buffer *newBuffer = BufferFactory::make(mSampleFormat,
                                                 mBufferFormat,
@@ -85,22 +89,19 @@ ManagedBuffer BufferPoolPrivate::acquire() {
 
 void BufferPoolPrivate::reclaim(Buffer *buffer)
 {
+    // TODO: Make lockless.
     std::lock_guard<std::mutex> lock(mPoolMutex);
-    
-    buffer->reset();
-    
     mPool.push(ManagedBuffer(buffer, ManagedBufferDeallocator(mWeakToSelf)));
 }
 
-void BufferPoolPrivate::preallocate( int count )
+void BufferPoolPrivate::preallocate(int count)
 {
-    
     // Lock the pool.
     std::lock_guard<std::mutex> lock(mPoolMutex);
     
     mWeakToSelf = this->shared_from_this();
     
-    for( int i = 0; i < count; ++i ) {
+    for(int i = 0; i < count; ++i) {
         Buffer *newBuffer = BufferFactory::make(mSampleFormat,
                                                 mBufferFormat,
                                                 mBufferLength);

@@ -43,11 +43,13 @@ namespace Stargazer {
             friend class BufferPoolFactory;
             
         public:
-            ~BufferPoolPrivate();
+            virtual ~BufferPoolPrivate();
 
             void setBufferTemplate(SampleFormat format,
                                    const BufferFormat &bufferFormat,
                                    const BufferLength &bufferLength);
+            
+            void clear();
             
             ManagedBuffer acquire();
             

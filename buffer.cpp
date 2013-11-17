@@ -11,6 +11,7 @@
 
 #include <core/alignedmemory.h>
 
+#include <iostream>
 #include <algorithm>
 
 using namespace Stargazer::Audio;
@@ -23,12 +24,10 @@ Buffer::Buffer ( const BufferFormat &format, const BufferLength &length ) :
     mWriteIndex(0),
     mReadIndex(0)
 {
-
 }
 
 Buffer::~Buffer()
 {
-    // Nothing to do here.
 }
 
 Duration Buffer::duration() const
@@ -95,9 +94,6 @@ TypedBuffer<T>::~TypedBuffer()
 {
     // Deallocate the buffer.
     AlignedMemory::deallocate(mChannels[0]);
-    
-    // Call base class destructor.
-    Buffer::~Buffer();
 }
 
 template<typename T>

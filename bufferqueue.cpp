@@ -8,12 +8,13 @@
 
 #include "bufferqueue.h"
 
+#include <iostream>
+
 using namespace Stargazer::Audio;
 
 BufferQueue::BufferQueue( uint32_t count ) :
 mCount(++count), mWriteIndex(0), mReadIndex(0), mElements(mCount)
 {
-    
 }
 
 BufferQueue::~BufferQueue() {
@@ -37,8 +38,11 @@ bool BufferQueue::empty() const {
 }
 
 void BufferQueue::clear() {
-    // TODO: Make safe.
-    mElements.clear();
+
+    // Swap a new vector in place. This will force a reallocation
+    // (unlike clear()!!) which will cause the ManagedBuffer to destroy the
+    // actual buffer. vector::clear() DOES NOT WORK!
+    std::vector<ManagedBuffer>(mCount).swap(mElements);
     mReadIndex = 0;
     mWriteIndex = 0;
 }

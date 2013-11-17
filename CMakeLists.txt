@@ -79,6 +79,7 @@ set( audio_SRCS
 	pipeline.cpp
 	rawbuffer.cpp
 	stage.cpp
+    trace.cpp
   	)
 
 # Headers common to both trusted and untrusted builds of audio.
@@ -101,6 +102,7 @@ set( audio_HDRS
 	pipeline.h
 	rawbuffer.h
 	stage.h
+    trace.h
 	)
 
 
