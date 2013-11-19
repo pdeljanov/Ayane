@@ -15,6 +15,7 @@
 #include "bufferpool.h"
 #include "bufferqueue.h"
 #include "clock.h"
+#include "messagebus.h"
 
 #include <memory>
 #include <mutex>
@@ -136,7 +137,7 @@ namespace Stargazer {
             /** 
              *  Activates the stage to prepare it for playback. Thread-safe. 
              */
-            bool activate();
+            bool activate(MessageBus *messageBus = nullptr);
             
             /** 
              *  Deactivates the stage. Thread-safe. 
@@ -147,7 +148,7 @@ namespace Stargazer {
              *  Starts playback. Once called, the stage will produce buffers
              *  clocked by the clock provider. Thread-safe.
              */
-            void play( AbstractClock *clock );
+            void play(AbstractClock *clock);
             
             /** 
              *  Stops playback. Thread-safe. 
@@ -230,6 +231,14 @@ namespace Stargazer {
             }
             
             /**
+             *  Gets the parent message bus on which the Stage can post a
+             *  message.
+             */
+            MessageBus *messageBus() {
+                return mParentMessageBus;
+            }
+            
+            /**
              *  Called by the Stage when the next set of buffers should be
              *  pushed to the Stage's sources.
              */
@@ -298,6 +307,8 @@ namespace Stargazer {
             class ReconfigureData;
             class SourceSinkPrivate;
             
+            /** Synchronous processing loop. */
+            void syncProcessLoop();
 
             /** Begins asynchronous processing. */
             void startAsyncProcess();
@@ -308,12 +319,14 @@ namespace Stargazer {
             /** Asynchronous processing loop. */
             void asyncProcessLoop();
             
-            /** Synchronous processing loop. */
-            void syncProcessLoop();
+            
+            /** Deactivate function without locking. */
+            void deactivateNoLock();
             
             /** Stop function without locking. */
             void stopNoLock();
 
+            
             /** 
              *  Determines if the stage should opeate asynchronously given the
              *  current configuration.
@@ -341,6 +354,8 @@ namespace Stargazer {
             
             std::unique_ptr<AbstractClock> mClock;
             uint32_t mBufferQueuesReportedNotFull;
+
+            MessageBus *mParentMessageBus;
         };
 
         /**

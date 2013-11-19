@@ -21,6 +21,8 @@ namespace Stargazer {
             
         public:
             
+            virtual ~AbstractClock(){};
+            
             /**
              *  Gets the current timestamp of the pipeline.
              */

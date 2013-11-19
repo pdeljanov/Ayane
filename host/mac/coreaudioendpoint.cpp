@@ -1543,12 +1543,12 @@ bool CoreAudioEndpoint::reconfigureInputFormat(const Sink &sink,
     size_t layoutSize = offsetof(AudioChannelLayout, mChannelDescriptions) +
         (numberChannelDescriptions * sizeof(AudioChannelDescription));
     
-    AudioChannelLayout *channelLayout = (AudioChannelLayout *)malloc(layoutSize);
-    memset(channelLayout, 0, layoutSize);
+    std::unique_ptr<AudioChannelLayout> channelLayout((AudioChannelLayout*)malloc(layoutSize));
+    memset(channelLayout.get(), 0, layoutSize);
     
     channelLayout->mChannelLayoutTag = kAudioChannelLayoutTag_Stereo;
     
-    if( !setAUOutputChannelLayout(channelLayout) ){
+    if( !setAUOutputChannelLayout(channelLayout.get()) ){
         ERROR_THIS("CoreAudioEndpoint::reconfigureSink")
         << "Setting the channel layout failed." << std::endl;
         return false;
@@ -1589,7 +1589,7 @@ bool CoreAudioEndpoint::reconfigureInputFormat(const Sink &sink,
         return false;
     }
 
-    TRACE_THIS("CoreAudioEndpoint::reconfigureSink")
+    INFO_THIS("CoreAudioEndpoint::reconfigureSink")
     << "Reconfiguration successful. "
     << format.sampleRate() << "Hz, Channels="
     << format.channelCount() << ", ChannelLayout="
@@ -1624,12 +1624,13 @@ OSStatus CoreAudioEndpoint::renderNotify(AudioUnitRenderActionFlags *ioActionFla
         if( mCurrentClockTick >= mClockPeriod ){
             mClockProvider.publish(mCurrentClockTick);
             mCurrentClockTick = 0.0;
+            
+            // Send a progress message.
+            messageBus()->publish(new ProgressMessage(mCurrentBuffer->timestamp()));
         }
 
-        
 	}
 	else if( *ioActionFlags & kAudioUnitRenderAction_PostRender ) {
-        
     }
     
     return noErr;
@@ -1666,13 +1667,15 @@ OSStatus CoreAudioEndpoint::render(AudioUnitRenderActionFlags *ioActionFlags,
         
         // Try to get a new buffer.
         if( mBuffers.pop(&mCurrentBuffer) ) {
-
             (*mCurrentBuffer) >> (*mAudioBufferListWrapper);
         }
         else {
             
+            DEBUG_ONLY(WARNING_THIS("CoreAudioEndpoint::render") << "Underrun."
+                       << std::endl);
+            
             // If absolutely nothing was written, signal we're outputting silence.
-            if( mAudioBufferListWrapper->mReadIndex == 0 ) {
+            if( mAudioBufferListWrapper->mWriteIndex == 0 ) {
                 *ioActionFlags |= kAudioUnitRenderAction_OutputIsSilence;
             }
 
@@ -1687,7 +1690,7 @@ OSStatus CoreAudioEndpoint::render(AudioUnitRenderActionFlags *ioActionFlags,
                 memset(bufferStart + mAudioBufferListWrapper->mWriteIndex, 0, byteCountToZero);
             }
             
-            // Break out here because space() won't be updated.
+            // Break here so we don't have to update mWriteIndex.
             break;
         }
     }

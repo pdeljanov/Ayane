@@ -60,10 +60,37 @@ Stage::Stage() :
     
 }
 
-Stage::~Stage()
-{
-    // Stage was "killed"
-    deactivate();
+Stage::~Stage() {
+    
+    // Transition the state to deactivated.
+    {
+        std::lock_guard<std::mutex> lock(mStateMutex);
+        
+        // Stage was playing, transition it to an activated state.
+        if( mState == kPlaying ) {
+            
+            WARNING_THIS("Stage::~Stage") << "It is **highly unrecommended** to"
+            " call the destructor of a playing stage. Call stop() first."
+            << std::endl;
+            
+            if( mAsynchronousProcessing ) {
+                stopAsyncProcess();
+            }
+            else {
+                mClock->stop();
+            }
+            
+            // Record the state.
+            mState = kActivated;
+            
+            INFO_THIS("Stage::~Stage") << "Force stopped." << std::endl;
+        }
+        
+        // Deactivate the stage.
+        deactivateNoLock();
+    }
+    
+    // Must release the state lock because the sources and sinks are cleared.
     
     // Clear the sources and sinks before Stage calls the destructors on its
     // member. This allows the sources and sinks to unlink themselves.
@@ -72,14 +99,7 @@ Stage::~Stage()
 }
 
 void Stage::syncProcessLoop() {
-    /*
-     *  Unlike the asynchronous processing loop which is directly
-     *  controlled by this Stage, a synchronous process loop is 
-     *  controlled by the upstream sink.  Therefore, before any state
-     *  changes can be made to Stage, the synchronous process loop
-     *  must finish its run. To accomplish this, obtain the state mutex
-     *  lock.
-     */
+    
     std::lock_guard<std::mutex> lock(mStateMutex);
     
     if( mState == kPlaying ) {
@@ -92,8 +112,8 @@ void Stage::syncProcessLoop() {
     }
 }
 
-void Stage::asyncProcessLoop()
-{
+void Stage::asyncProcessLoop() {
+    
     bool doBufferRun = false;
     ProcessIOFlags ioFlags = 0;
     uint32_t activeSources = mSources.size();
@@ -127,8 +147,8 @@ void Stage::asyncProcessLoop()
     << std::this_thread::get_id() << " exiting." << std::endl;
 }
 
-void Stage::startAsyncProcess()
-{
+void Stage::startAsyncProcess(){
+    
     if( !mProcessingThread.joinable() ){
 
         // Start the clock.
@@ -146,13 +166,13 @@ void Stage::startAsyncProcess()
 
 }
 
-void Stage::stopAsyncProcess()
-{
+void Stage::stopAsyncProcess() {
+    
     if( mProcessingThread.joinable() ){
         
         TRACE_THIS("Stage::stopAsyncProcess") << "Waiting for asynchronous "
         "processing thread to stop." << std::endl;
-                
+
         // Stop the clock. Processing thread will exit
         mClock->stop();
         mProcessingThread.join();
@@ -206,7 +226,7 @@ bool Stage::shouldRunAsynchronous() const {
             
             // If the downstream Stage contains more than one sink, make the
             // link asynchronous.
-            if( source->mLinkedSink->mStage->sinkCount() > 1 ) {
+            if(source->mLinkedSink->mStage->sinkCount() > 1) {
                 return true;
             }
             
@@ -217,12 +237,14 @@ bool Stage::shouldRunAsynchronous() const {
 }
 
 
-bool Stage::activate()
-{
+bool Stage::activate(MessageBus *messageBus) {
+    
     std::lock_guard<std::mutex> lock(mStateMutex);
     
     // Deactivated -> Activated.
     if( mState == kDeactivated ) {
+        
+        mParentMessageBus = messageBus;
         
         // Switch state to activated.
         mState = kActivated;
@@ -235,10 +257,8 @@ bool Stage::activate()
     return false;
 }
 
-void Stage::deactivate()
-{
-    std::lock_guard<std::mutex> lock(mStateMutex);
-
+void Stage::deactivateNoLock() {
+    
     // If the stage is in the playing state, stop playback.
     if( mState == kPlaying ) {
         // Stop playback. Use no-lock variant since we have the state lock.
@@ -247,7 +267,7 @@ void Stage::deactivate()
     
     // If the stage is activated, proceed to deactivate it.
     if( mState == kActivated ) {
-
+        
         // Reset sources (clears synchronicity and empties buffers).
         for(SourceIterator iter = mSources.begin(), end = mSources.end();
             iter != end; ++iter)
@@ -262,8 +282,13 @@ void Stage::deactivate()
     }
 }
 
-void Stage::play( AbstractClock *clock )
-{
+void Stage::deactivate() {
+    std::lock_guard<std::mutex> lock(mStateMutex);
+    deactivateNoLock();
+}
+
+void Stage::play( AbstractClock *clock ) {
+    
     std::lock_guard<std::mutex> lock(mStateMutex);
 
     // Activated (Stopped) -> Playing
@@ -313,8 +338,8 @@ void Stage::stop() {
     stopNoLock();
 }
 
-void Stage::stopNoLock()
-{
+void Stage::stopNoLock() {
+    
     if( mState == kPlaying ) {
         
         if( mAsynchronousProcessing ) {
@@ -338,10 +363,11 @@ void Stage::stopNoLock()
 
 
 
-void Stage::addSource(const std::string &name)
-{
+void Stage::addSource(const std::string &name) {
+    
     if( mState == kDeactivated ){
-        mSources.insert( std::make_pair(name, std::unique_ptr<Source>(new Source(this))) );
+        mSources.insert(std::make_pair(name,
+                                       std::unique_ptr<Source>(new Source(this))));
     }
     else {
         NOTICE_THIS("Stage::addSource") << "Can't add source unless stage is "
@@ -349,10 +375,10 @@ void Stage::addSource(const std::string &name)
     }
 }
 
-void Stage::addSink(const std::string &name)
-{
+void Stage::addSink(const std::string &name) {
     if( mState == kDeactivated ) {
-        mSinks.insert( std::make_pair(name, std::unique_ptr<Sink>(new Sink(this))) );
+        mSinks.insert(std::make_pair(name,
+                                     std::unique_ptr<Sink>(new Sink(this))));
     }
     else {
         NOTICE_THIS("Stage::addSink") << "Can't add sink unless stage is "
@@ -367,7 +393,7 @@ void Stage::beginReconfiguration(ReconfigureData &data) {
 
     // Lock the state mutex. This will prevent any process() runs.
     mStateMutex.lock();
-    
+
     // Store previous state.
     data.mState = mState;
 }
@@ -390,6 +416,8 @@ bool Stage::replace(Source *current, Source *next, Sink *sink) {
     
     // Null pointer check.
     if((current == nullptr) || (next == nullptr) || (sink == nullptr)) {
+        ERROR("Stage::replace") << "Attempting to relink null pointer."
+        << std::endl;
         return false;
     }
     
@@ -442,6 +470,7 @@ bool Stage::link( Source *source, Sink *sink )
 {
     // Null pointer check.
     if( (source == nullptr) || (sink == nullptr) ) {
+        ERROR("Stage::link") << "Attempting to link null pointer." << std::endl;
         return false;
     }
     
@@ -475,6 +504,8 @@ void Stage::unlink( Source *source, Sink *sink )
 {
     // Null pointer check.
     if( (source == nullptr) || (sink == nullptr) ) {
+        ERROR("Stage::unlink") << "Attempting to unlink null pointer."
+        << std::endl;
         return;
     }
     

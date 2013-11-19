@@ -29,7 +29,7 @@ namespace Stargazer {
         public:
 
             Clock();
-            ~Clock();
+            virtual ~Clock();
             
             /**
              *  Gets the current timestamp of the pipeline.

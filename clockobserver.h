@@ -25,7 +25,7 @@ namespace Stargazer {
             
         public:
             
-            ~ClockObserver();
+            virtual ~ClockObserver();
             
             virtual inline double pipelineTime() const {
                 return mClock->pipelineTime();

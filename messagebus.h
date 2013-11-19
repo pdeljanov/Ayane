@@ -12,6 +12,9 @@
 #include <core/macros.h>
 #include <core/dpointer.h>
 
+#include <string>
+#include <functional>
+
 #include "duration.h"
 
 namespace Stargazer {
@@ -51,15 +54,12 @@ namespace Stargazer {
         
         /** Message base class. */
         class MessageBase {
-        protected:
-            
-            MessageBase(MessageType type) : mType(type)
-            {
-            }
-            
-            MessageType mType;
+            friend class MessageBusPrivate;
             
         public:
+            
+            virtual ~MessageBase(){
+            }
             
             /**
              *  Gets the type of the message.
@@ -67,38 +67,58 @@ namespace Stargazer {
             MessageType typeOf() const {
                 return mType;
             }
-
+            
+        protected:
+            
+            MessageBase(MessageType type) : mType(type), mNext(nullptr)
+            {
+            }
+            
+            MessageType mType;
+            
+        private:
+            std::atomic<MessageBase*> mNext;
+            
         };
         
         class ErrorMessage : public MessageBase {
 
         public:
-            ErrorMessage() : MessageBase(kError)
+            ErrorMessage(const std::string &message) :
+            MessageBase(kWarning), mMessage(message)
             {
             }
             
             static MessageType type() { return kError; }
             
+        private:
+            std::string mMessage;
         };
         
         class WarningMessage : public MessageBase {
         public:
-            WarningMessage() : MessageBase(kWarning)
+            WarningMessage(const std::string &message) :
+            MessageBase(kWarning), mMessage(message)
             {
             }
             
             static MessageType type() { return kWarning; }
             
+        private:
+            std::string mMessage;
         };
         
         class TraceMessage : public MessageBase {
         public:
-            TraceMessage() : MessageBase(kTrace)
+            TraceMessage(const std::string &message) :
+            MessageBase(kTrace), mMessage(message)
             {
             }
             
             static MessageType type() { return kTrace; }
             
+        private:
+            std::string mMessage;
         };
         
         class DurationMessage : public MessageBase {
@@ -117,12 +137,15 @@ namespace Stargazer {
         
         class ProgressMessage : public MessageBase {
         public:
-            ProgressMessage() : MessageBase(kProgress)
+            ProgressMessage(const Duration &duration) :
+            MessageBase(kProgress),
+            mDuration(duration)
             {
             }
             
             static MessageType type() { return kProgress; }
             
+            Duration mDuration;
         };
         
         class EndOfStreamMessage : public MessageBase {
@@ -147,23 +170,33 @@ namespace Stargazer {
         };
 
         
+        /**
+         *  Message subscriber callback type.
+         */
+        typedef std::function<void(const MessageBase&)> MessageHandler;
+        
         
         class MessageBusPrivate;
         
+        /**
+         *  A MessageBus is a multi-publisher message queue that provides a
+         *  lockless message posting interface.
+         */
         class MessageBus {
         public:
-            
 
+            MessageBus();
+            ~MessageBus();
             
-            void post(const ErrorMessage &message);
-            void post(const WarningMessage &message);
-            void post(const TraceMessage &message);
-            void post(const DurationMessage &message);
-            void post(const ProgressMessage &message);
-            void post(const EndOfStreamMessage &message);
-            void post(const ClockLostMessage &message);
+            void start();
+            void stop();
             
+            bool isRunning() const;
             
+            void publish(MessageBase *message);
+            
+            void subscribe(MessageType type, MessageHandler &handler);
+            void unsubscribe(MessageType type, MessageHandler &handler);
 
         private:
             STARGAZER_DISALLOW_COPY_AND_ASSIGN(MessageBus);

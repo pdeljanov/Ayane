@@ -12,12 +12,12 @@
 #include <core/macros.h>
 #include <ostream>
 
-#if defined(DEBUG)
-/** Executes a statement only in debug mode. */
-#define DEBUG_ONLY(statement) statement
-#else
+#if defined(NDEBUG)
 /** Executes a statement only in debug mode. */
 #define DEBUG_ONLY(statement) ((void)0)
+#else
+/** Executes a statement only in debug mode. */
+#define DEBUG_ONLY(statement) statement
 #endif
 
 #define ERROR(signature)        Stargazer::Audio::Trace::instance().error(signature)
