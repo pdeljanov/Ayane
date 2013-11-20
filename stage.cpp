@@ -37,7 +37,6 @@ namespace Stargazer {
          *  begin/endReconfiguration function pair.
          */
         class Stage::ReconfigureData {
-            
         public:
             State mState;
         };
@@ -75,10 +74,14 @@ Stage::~Stage() {
             
             if( mAsynchronousProcessing ) {
                 stopAsyncProcess();
+                
+                if(mClock){
+                    delete mClock;
+                }
             }
-            else {
-                mClock->stop();
-            }
+            
+            // Reset clock pointer.
+            mClock = nullptr;
             
             // Record the state.
             mState = kActivated;
@@ -98,12 +101,20 @@ Stage::~Stage() {
     mSinks.clear();
 }
 
-void Stage::syncProcessLoop() {
+void Stage::syncProcessLoop(Clock *clock) {
     
     std::lock_guard<std::mutex> lock(mStateMutex);
     
     if( mState == kPlaying ) {
+        
+        // Reset the processing IO flags
         ProcessIOFlags ioFlags = 0;
+        
+        // Update the clock pointer so that synchronous process calls can
+        // cascade their clocks.
+        mClock = clock;
+        
+        // Do a process run.
         process(&ioFlags);
     }
     else {
@@ -173,7 +184,7 @@ void Stage::stopAsyncProcess() {
         TRACE_THIS("Stage::stopAsyncProcess") << "Waiting for asynchronous "
         "processing thread to stop." << std::endl;
 
-        // Stop the clock. Processing thread will exit
+        // Stop the clock. Processing thread will exit.
         mClock->stop();
         mProcessingThread.join();
     }
@@ -237,14 +248,15 @@ bool Stage::shouldRunAsynchronous() const {
 }
 
 
-bool Stage::activate(MessageBus *messageBus) {
+bool Stage::activate(Pipeline *pipeline) {
     
     std::lock_guard<std::mutex> lock(mStateMutex);
     
     // Deactivated -> Activated.
     if( mState == kDeactivated ) {
         
-        mParentMessageBus = messageBus;
+        // Set the pipeline.
+        mParentPipeline = pipeline;
         
         // Switch state to activated.
         mState = kActivated;
@@ -275,6 +287,9 @@ void Stage::deactivateNoLock() {
             iter->second->reset();
         }
         
+        // Remove pipeline.
+        mParentPipeline = nullptr;
+        
         // Record state.
         mState = kDeactivated;
         
@@ -287,15 +302,12 @@ void Stage::deactivate() {
     deactivateNoLock();
 }
 
-void Stage::play( AbstractClock *clock ) {
+void Stage::play(ClockProvider &clockProvider) {
     
     std::lock_guard<std::mutex> lock(mStateMutex);
 
     // Activated (Stopped) -> Playing
     if( mState == kActivated ) {
-        
-        // Set the clock.
-        mClock.reset(clock);
         
         // Determine synchronicity.
         mAsynchronousProcessing = shouldRunAsynchronous();
@@ -312,17 +324,21 @@ void Stage::play( AbstractClock *clock ) {
         {
             iter->second->mShared->mLinkSynchronicity = mode;
         }
+        
+        // Start the clock
+        // NOTE: Clock must be started before beginPlayback().
+        if( mAsynchronousProcessing ){
+            mClock = new Clock;
+            clockProvider.registerClock(static_cast<Clock*>(mClock));
+        }
 
-        // Begin playback callback. Must occur before buffers are processed!
+        // Begin playback callback.
+        // NOTE: Must occur before buffers are processing.
         beginPlayback();
  
+        // If asynchronous, start the processing thread.
         if( mAsynchronousProcessing ) {
-            // If asynchronous, start the processing thread.
             startAsyncProcess();
-        }
-        else {
-            // Start the clock manually in synchronous mode.
-            mClock->start();
         }
         
         // Record the state.
@@ -346,11 +362,17 @@ void Stage::stopNoLock() {
             // If asynchronous, stop the processing thread.
             // Wait till processing stops.
             stopAsyncProcess();
+            
+            // We own the clock, so delete it.
+            if (mClock) {
+                delete mClock;
+            }
         }
-        else {
-            // If synchronous, stop the clock manually.
-            mClock->stop();
-        }
+        
+        // Set the clock pointer to null.
+        // NOTE: Even if running synchronously, the clock pointer needs to be
+        // reset to null so that the Stage won't free the un-owned clock.
+        mClock = nullptr;
         
         // Playback stopped callback. Must occur after all buffers are
         // processed.
@@ -664,7 +686,7 @@ Stage::Sink::PullResult Stage::Sink::pull( ManagedBuffer *outBuffer )
             std::unique_lock<std::mutex> lock(mShared->mPushMutex);
             
             // Wait for a buffer to be pushed into the queue.
-            while( mShared->mBufferQueue.empty() ) {
+            while(mShared->mBufferQueue.empty()) {
                 mShared->mPushNotification.wait(lock);
 
                 if( mPullCancelled ) {
@@ -674,10 +696,8 @@ Stage::Sink::PullResult Stage::Sink::pull( ManagedBuffer *outBuffer )
             }
         }
         case kSynchronous: {
-            // Generate a buffer only if one isn't already pending.
-            if( mShared->mBufferQueue.empty() ) {
-                mLinkedSource->mStage->syncProcessLoop();
-            }
+            // TODO: Should there be a check if the buffer queue is empty?
+            mLinkedSource->mStage->syncProcessLoop(mStage->mClock);
         }
     }
     

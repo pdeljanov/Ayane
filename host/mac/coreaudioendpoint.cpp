@@ -10,6 +10,7 @@
  */
 
 #include "coreaudioendpoint.h"
+#include "audio/messagebus.h"
 
 #include "audio/trace.h"
 #include "audio/rawbuffer.h"
@@ -1449,7 +1450,7 @@ void CoreAudioEndpoint::process( ProcessIOFlags *ioFlags ){
         << std::endl;
         return;
     }
-    
+
     Sink::PullResult result = input()->pull(&buffer);
     
     // May kick off a sink reconfiguration.
@@ -1625,8 +1626,10 @@ OSStatus CoreAudioEndpoint::renderNotify(AudioUnitRenderActionFlags *ioActionFla
             mClockProvider.publish(mCurrentClockTick);
             mCurrentClockTick = 0.0;
             
-            // Send a progress message.
-            messageBus()->publish(new ProgressMessage(mCurrentBuffer->timestamp()));
+            if( mCurrentBuffer ){
+                // Send a progress message.
+                pipeline()->messageBus().publish(new ProgressMessage(mCurrentBuffer->timestamp()));
+            }
         }
 
 	}

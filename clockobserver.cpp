@@ -16,7 +16,7 @@ ClockObserver::ClockObserver( Clock *source ) : mClock(source) {
 }
 
 ClockObserver::~ClockObserver() {
-    mClock->removeObserver(this);
+    //mClock->removeObserver(this);
 }
 
 void ClockObserver::start() {

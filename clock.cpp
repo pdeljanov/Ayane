@@ -84,13 +84,3 @@ bool Clock::wait() {
     // Return clock state.
     return mStarted;
 }
-
-ClockObserver *Clock::makeObserver() {
-    ClockObserver *observer = new ClockObserver(this);
-    mObservers.push_back(observer);
-    return observer;
-}
-
-void Clock::removeObserver(ClockObserver *observer) {
-    mObservers.remove(observer);
-}

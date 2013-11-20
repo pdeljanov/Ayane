@@ -12,6 +12,7 @@
 #include <core/macros.h>
 #include <ostream>
 
+
 #if defined(NDEBUG)
 /** Executes a statement only in debug mode. */
 #define DEBUG_ONLY(statement) ((void)0)
@@ -96,6 +97,8 @@ namespace Stargazer {
             STARGAZER_DISALLOW_DEFAULT_CTOR_COPY_AND_ASSIGN(Trace);
 
             Priority mMaximumPriority;
+            
+            std::mutex mMutex;
         };
         
         

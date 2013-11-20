@@ -8,6 +8,7 @@
 
 #include "trace.h"
 
+#include <sstream>
 #include <iostream>
 
 using namespace Stargazer::Audio;
@@ -44,6 +45,34 @@ using namespace Stargazer::Audio;
 #define ANSI_COLOUR_END ""
 
 #endif
+
+
+class LockedOutputStream : public std::ostream {
+public:
+    
+    LockedOutputStream(std::ostream &outputStream, std::mutex &mutex) :
+        std::ostream(outputStream.rdbuf()),
+        mMutex(mutex)
+    {
+        mMutex.lock();
+    }
+    
+    explicit LockedOutputStream(LockedOutputStream &lockedStream) :
+        std::ostream(lockedStream.rdbuf()),
+        mMutex(lockedStream.mMutex)
+    {
+        
+    }
+    
+    ~LockedOutputStream(){
+        mMutex.unlock();
+    }
+    
+private:
+    std::mutex &mMutex;
+};
+
+
 
 class NullOutputBuffer : public std::streambuf {
 public:
@@ -96,6 +125,7 @@ std::ostream &Trace::trace(const char *signature) {
 
 std::ostream &Trace::trace(const char *signature, const void *instance) {
     if(mMaximumPriority >= kTrace){
+
         std::cout << ANSI_GREEN "(" << instance << ") " << signature << ": " ANSI_COLOUR_END;
         return std::cout;
     }
@@ -107,7 +137,7 @@ std::ostream &Trace::trace(const char *signature, const void *instance) {
 
 std::ostream &Trace::info(const char *signature) {
     if(mMaximumPriority >= kInfo){
-        
+
         std::cout << ANSI_CYAN << signature << ": " ANSI_COLOUR_END;
         return std::cout;
     }

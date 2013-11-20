@@ -14,8 +14,8 @@
 
 #include "bufferpool.h"
 #include "bufferqueue.h"
-#include "clock.h"
-#include "messagebus.h"
+#include "clockprovider.h"
+#include "pipeline.h"
 
 #include <memory>
 #include <mutex>
@@ -133,11 +133,11 @@ namespace Stargazer {
             int sinkCount() const {
                 return mSinks.size();
             }
-            
+
             /** 
              *  Activates the stage to prepare it for playback. Thread-safe. 
              */
-            bool activate(MessageBus *messageBus = nullptr);
+            bool activate(Pipeline *pipeline = nullptr);
             
             /** 
              *  Deactivates the stage. Thread-safe. 
@@ -148,7 +148,7 @@ namespace Stargazer {
              *  Starts playback. Once called, the stage will produce buffers
              *  clocked by the clock provider. Thread-safe.
              */
-            void play(AbstractClock *clock);
+            void play(ClockProvider &clockProvider);
             
             /** 
              *  Stops playback. Thread-safe. 
@@ -226,16 +226,16 @@ namespace Stargazer {
             /**
              *  Gets the stage clock.
              */
-            AbstractClock *clock() const {
-                return mClock.get();
+            const Clock *clock() const {
+                return mClock;
             }
             
             /**
              *  Gets the parent message bus on which the Stage can post a
              *  message.
              */
-            MessageBus *messageBus() {
-                return mParentMessageBus;
+            Pipeline *pipeline() const {
+                return mParentPipeline;
             }
             
             /**
@@ -308,7 +308,7 @@ namespace Stargazer {
             class SourceSinkPrivate;
             
             /** Synchronous processing loop. */
-            void syncProcessLoop();
+            void syncProcessLoop(Clock*);
 
             /** Begins asynchronous processing. */
             void startAsyncProcess();
@@ -352,10 +352,12 @@ namespace Stargazer {
             std::thread mProcessingThread;
             bool mAsynchronousProcessing;
             
-            std::unique_ptr<AbstractClock> mClock;
+            // Clock pointer (if Stage is async. owned by Stage, otherwise,
+            // use as readonly.
+            Clock *mClock;
             uint32_t mBufferQueuesReportedNotFull;
 
-            MessageBus *mParentMessageBus;
+            Pipeline *mParentPipeline;
         };
 
         /**

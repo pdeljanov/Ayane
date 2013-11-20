@@ -9,6 +9,7 @@
 #ifndef STARGAZER_STDLIB_AUDIO_CLOCKOBSERVER_H_
 #define STARGAZER_STDLIB_AUDIO_CLOCKOBSERVER_H_
 
+#include "abstractclock.h"
 #include "clock.h"
 
 namespace Stargazer {

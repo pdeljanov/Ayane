@@ -34,8 +34,7 @@ namespace Stargazer {
             typedef std::vector<StageType>::const_iterator const_iterator;
             typedef std::vector<StageType>::iterator iterator;
             
-            
-            const MessageBus &messageBus();
+            MessageBus &messageBus();
             
             bool activate();
             bool deactivate();
