@@ -7,7 +7,7 @@
  */
 
 #include "stage.h"
-#include "trace.h"
+#include "core/trace.h"
 
 namespace Stargazer {
     namespace Audio  {

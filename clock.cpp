@@ -7,7 +7,6 @@
  */
 
 #include "clock.h"
-#include "clockobserver.h"
 
 using namespace Stargazer::Audio;
 

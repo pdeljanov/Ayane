@@ -9,7 +9,7 @@
 #include "pipeline.h"
 #include "messagebus.h"
 #include "stage.h"
-#include "trace.h"
+#include "core/trace.h"
 
 using namespace Stargazer::Audio;
 
@@ -26,12 +26,12 @@ namespace Stargazer {
              *  Searches the Stages inserted into the pipeline for clock 
              *  providers, and chooses the slowest one.
              */
-            ClockProvider &selectPipelineClockProvider() const;
+            ClockProvider *selectPipelineClockProvider() const;
             
             // Pipeline state (same as Stage states)
             Stage::State mState;
             std::mutex mStateMutex;
-            
+
             // Message bus
             MessageBus mMessageBus;
             
@@ -42,11 +42,11 @@ namespace Stargazer {
     }
 }
 
-ClockProvider &PipelinePrivate::selectPipelineClockProvider() const {
+ClockProvider *PipelinePrivate::selectPipelineClockProvider() const {
     
     // Use the first clock provider we find.
     
-    
+    return nullptr;
 }
 
 
@@ -66,6 +66,42 @@ MessageBus &Pipeline::messageBus() {
     return d->mMessageBus;
 }
 
+Pipeline::iterator Pipeline::begin(){
+    S_D(Pipeline);
+    return d->mStages.begin();
+}
+
+Pipeline::const_iterator Pipeline::begin() const {
+    S_D(const Pipeline);
+    return d->mStages.begin();
+}
+
+Pipeline::iterator Pipeline::end(){
+    S_D(Pipeline);
+    return d->mStages.end();
+}
+
+
+Pipeline::const_iterator Pipeline::end() const {
+    S_D(const Pipeline);
+    return d->mStages.end();
+}
+
+
+void Pipeline::addStage(std::unique_ptr<Stage> stage) {
+    S_D(Pipeline);
+    
+    std::lock_guard<std::mutex> lock(d->mStateMutex);
+    
+    // Add the Stage.
+    d->mStages.push_back(std::move(stage));
+}
+
+
+
+
+
+
 bool Pipeline::activate() {
     S_D(Pipeline);
 
@@ -83,8 +119,8 @@ bool Pipeline::activate() {
             // Activate stage with ownership given to the pipeline.
             if( !(*iter)->activate(this) ){
                 
-                WARNING_THIS("Pipeline::activate") << "Stage " << iter->get() <<
-                " failed to activated." << std::endl;
+                ERROR_THIS("Pipeline::activate") << "Stage " << iter->get() <<
+                " failed to activate." << std::endl;
                 
                 // Deactivate already activated Stages.
                 for(end = iter, iter = d->mStages.begin();
@@ -105,6 +141,9 @@ bool Pipeline::activate() {
         
     }
     else {
+        WARNING_THIS("Pipeline::activate") << "The pipeline has already been "
+        "activated." << std::endl;
+
         return false;
     }
 }
@@ -150,18 +189,30 @@ bool Pipeline::play() {
     
     if( d->mState == Stage::kActivated ) {
         
-        ClockProvider &clockProvider = d->selectPipelineClockProvider();
+        // Try to find a clock provider.
+        ClockProvider *clockProvider = d->selectPipelineClockProvider();
+        
+        if(clockProvider == nullptr){
+            ERROR_THIS("Pipeline::play") << "Could not acquire a clock "
+            "provider for the pipeline." << std::endl;
+            return false;
+        }
+        
+        // TODO: Configure the clock provider.
         
         for (iterator iter = d->mStages.begin(), end = d->mStages.end();
              iter != end; ++iter)
         {
-            (*iter)->play(clockProvider);
+            (*iter)->play(*clockProvider);
         }
         
         // Success
         return true;
     }
     else {
+        WARNING_THIS("Pipeline::activate") << "The pipeline is not activated."
+        << std::endl;
+
         return false;
     }
     
@@ -189,6 +240,9 @@ bool Pipeline::stop() {
         return true;
     }
     else {
+        WARNING_THIS("Pipeline::activate") << "The pipeline is not playing."
+        << std::endl;
+        
         return false;
     }
 }

@@ -7,7 +7,7 @@
  */
 
 #include "messagebus.h"
-#include "trace.h"
+#include <core/trace.h>
 
 #include <vector>
 #include <map>

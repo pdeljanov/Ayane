@@ -26,7 +26,7 @@ if( ${STARGAZER_HOST} MATCHES "mac" )
 		host/mac/coreaudioendpoint.h
 		)
 
-else()
+elseif(NOT STARGAZER_IS_PLATFORM)
 	message( FATAL_ERROR "'stargazer_stdlib_audio' does not support your host." )
 endif()
 
@@ -61,7 +61,6 @@ set( audio_trusted_HDRS
 
 # Sources common to both trusted and untrusted builds of audio.
 set( audio_SRCS
-	abstractclock.cpp
 	buffer.cpp
 	bufferfactory.cpp
 	bufferframes.cpp
@@ -70,7 +69,6 @@ set( audio_SRCS
     bufferpool.cpp
 	bufferqueue.cpp
 	clock.cpp
-	clockobserver.cpp
 	clockprovider.cpp
 	channels.cpp
 	duration.cpp
@@ -79,12 +77,10 @@ set( audio_SRCS
 	pipeline.cpp
 	rawbuffer.cpp
 	stage.cpp
-    trace.cpp
   	)
 
 # Headers common to both trusted and untrusted builds of audio.
 set( audio_HDRS
-	abstractclock.h
 	buffer.h
 	bufferfactory.h
 	bufferframes.h
@@ -93,7 +89,6 @@ set( audio_HDRS
     bufferpool.h
 	bufferqueue.h
 	clock.h
-	clockobserver.h
 	clockprovider.h
 	channels.h
 	duration.h
@@ -102,7 +97,6 @@ set( audio_HDRS
 	pipeline.h
 	rawbuffer.h
 	stage.h
-    trace.h
 	)
 
 
@@ -120,6 +114,7 @@ if( STARGAZER_IS_PLATFORM )
 			)
 		
 	target_link_libraries( stargazer_stdlib_audio-pexe 
+                            stargazer_stdlib_core
 							)
 	
 	install( TARGETS stargazer_stdlib_audio-pexe
@@ -148,18 +143,11 @@ else()
 				)
 	
 	target_link_libraries( stargazer_stdlib_audio
+                            stargazer_stdlib_core
 						 ${audio_host_LIBS}
 							)
-	
 
-	# Test App.
-	add_executable( stargazer_stdlib_audio-benchmark benchmark.cpp )
-	
-	target_link_libraries(	stargazer_stdlib_audio-benchmark
-							stargazer_stdlib_audio
-							)
-
-	install( TARGETS stargazer_stdlib_audio
+	install(TARGETS stargazer_stdlib_audio
 			LIBRARY DESTINATION lib/stargazer
 			ARCHIVE DESTINATION lib/stargazer 
 			)

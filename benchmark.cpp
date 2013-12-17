@@ -8,7 +8,6 @@
 //
 
 #include "clockprovider.h"
-#include "clockobserver.h"
 #include "bufferfactory.h"
 
 #include <audio/trace.h>

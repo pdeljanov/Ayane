@@ -12,7 +12,7 @@
 #include "coreaudioendpoint.h"
 #include "audio/messagebus.h"
 
-#include "audio/trace.h"
+#include "core/trace.h"
 #include "audio/rawbuffer.h"
 
 using namespace Stargazer::Audio;

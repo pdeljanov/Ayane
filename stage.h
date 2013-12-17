@@ -57,7 +57,8 @@ namespace Stargazer {
             typedef std::pair<ConstSinkIterator, ConstSinkIterator> ConstSinkIteratorPair;
 
             
-            /** Enumeration of synchronicity modes for a Stage. Synchronicity modes
+            /** 
+             *  Enumeration of synchronicity modes for a Stage. Synchronicity modes
              *  control how a stage will be threaded.
              */
             typedef enum
@@ -303,6 +304,7 @@ namespace Stargazer {
             
         private:
             STARGAZER_DISALLOW_COPY_AND_ASSIGN(Stage);
+
             
             class ReconfigureData;
             class SourceSinkPrivate;
@@ -352,8 +354,10 @@ namespace Stargazer {
             std::thread mProcessingThread;
             bool mAsynchronousProcessing;
             
-            // Clock pointer (if Stage is async. owned by Stage, otherwise,
-            // use as readonly.
+            // Clock pointer (If the Stage is running asynchronously, mClock is
+            // owned by the Stage and must be freed when stopped. Otherwise,
+            // mClock is points to a Clock owned by another Stage and should be
+            // reset to null when stopped.
             Clock *mClock;
             uint32_t mBufferQueuesReportedNotFull;
 
@@ -428,14 +432,15 @@ namespace Stargazer {
             
         public:
             
-            /** Enumeration of scheduling modes for a Sink Port. Scheduling
-             *  modes help the pipeline assign a synchronicity mode to the
-             *  stage belonging to the sink's linked source port.
+            /** 
+             *  Enumeration of scheduling modes for a Sink Port. Scheduling
+             *  modes help determine the synchronicity mode the Stage should run
+             *  with.
              */
             typedef enum
             {
                 /**
-                 *  Default scheduling. No hints to the pipeline scheduler.
+                 *  Default scheduling. No hints to the Stage scheduler.
                  *  This mode is guaranteed to be safe for all valid
                  *  pipeline use cases.
                  */

@@ -47,7 +47,10 @@ namespace Stargazer {
             iterator end();
             const_iterator end() const;
             
-            void addStage();
+            /**
+             *  Adds a Stage to the pipeline.
+             */
+            void addStage(std::unique_ptr<Stage> stage);
             void removeStage();
             
             Stage *operator[](int index);
