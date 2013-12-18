@@ -6,9 +6,9 @@
  *
  */
 
-#include "buffer.h"
-#include "rawbuffer.h"
-#include "alignedmemory.h"
+#include "Ayane/Buffer.h"
+#include "Ayane/RawBuffer.h"
+#include "Ayane/AlignedMemory.h"
 
 #include <algorithm>
 

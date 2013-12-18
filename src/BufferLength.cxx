@@ -6,7 +6,7 @@
  *
  */
 
-#include "bufferlength.h"
+#include "Ayane/BufferLength.h"
 
 using namespace Ayane;
 

@@ -6,7 +6,7 @@
  *
  */
 
-#include "bufferpool.h"
+#include "Ayane/BufferPool.h"
 
 using namespace Ayane;
 

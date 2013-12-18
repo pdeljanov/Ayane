@@ -9,7 +9,7 @@
 #ifndef AYANE_AUDIO_BUFFERFACTORY_H_
 #define AYANE_AUDIO_BUFFERFACTORY_H_
 
-#include "buffer.h"
+#include "Ayane/Buffer.h"
 
 namespace Ayane {
         

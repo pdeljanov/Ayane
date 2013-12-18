@@ -6,8 +6,8 @@
  *
  */
 
-#include "stage.h"
-#include "trace.h"
+#include "Ayane/Stage.h"
+#include "Ayane/Trace.h"
 
 namespace Ayane {
         

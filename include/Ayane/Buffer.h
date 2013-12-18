@@ -11,14 +11,14 @@
 
 #include <cstddef>
 
-#include "macros.h"
-#include "attributes.h"
-#include "bufferlength.h"
-#include "bufferformat.h"
-#include "bufferframes.h"
+#include "Ayane/Macros.h"
+#include "Ayane/Attributes.h"
+#include "Ayane/bufferLength.h"
+#include "Ayane/bufferFormat.h"
+#include "Ayane/bufferFrames.h"
 
-#include "duration.h"
-#include "formats.h"
+#include "Ayane/Duration.h"
+#include "Ayane/SampleFormats.h"
 
 namespace Ayane {
     

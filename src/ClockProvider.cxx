@@ -6,7 +6,7 @@
  *
  */
 
-#include "clockprovider.h"
+#include "Ayane/Clockprovider.h"
 
 using namespace Ayane;
 

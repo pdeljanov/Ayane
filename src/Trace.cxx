@@ -6,7 +6,7 @@
  *
  */
 
-#include "trace.h"
+#include "Ayane/Trace.h"
 
 #include <sstream>
 #include <iostream>

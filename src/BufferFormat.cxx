@@ -6,7 +6,7 @@
  *
  */
 
-#include "bufferformat.h"
+#include "Ayane/BufferFormat.h"
 
 using namespace Ayane;
 

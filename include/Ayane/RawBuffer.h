@@ -11,9 +11,9 @@
 
 #include <cstddef>
 
-#include "macros.h"
-#include "formats.h"
-#include "channels.h"
+#include "Ayane/Macros.h"
+#include "Ayane/SampleFormats.h"
+#include "Ayane/Channels.h"
 
 namespace Ayane {
     

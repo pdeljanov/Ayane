@@ -6,7 +6,7 @@
  *
  */
 
-#include "bufferfactory.h"
+#include "Ayane/BufferFactory.h"
 
 using namespace Ayane;
 

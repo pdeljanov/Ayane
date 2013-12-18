@@ -6,7 +6,7 @@
  *
  */
 
-#include "duration.h"
+#include "Ayane/Duration.h"
 
 #include <cmath>
 

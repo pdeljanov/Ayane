@@ -6,7 +6,7 @@
  *
  */
 
-#include "channels.h"
+#include "Ayane/Channels.h"
 
 using namespace Ayane;
 

@@ -9,8 +9,8 @@
 #ifndef AYANE_AUDIO_BUFFERLENGTH_H_
 #define AYANE_AUDIO_BUFFERLENGTH_H_
 
-#include "formats.h"
-#include "duration.h"
+#include "Ayane/SampleFormats.h"
+#include "Ayane/Duration.h"
 
 namespace Ayane {
     

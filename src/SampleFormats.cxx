@@ -6,7 +6,7 @@
  *
  */
 
-#include "formats.h"
+#include "Ayane/SampleFormats.h"
 
 using namespace Ayane;
 

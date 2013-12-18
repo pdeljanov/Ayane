@@ -6,7 +6,7 @@
  *
  */
 
-#include "bufferqueue.h"
+#include "Ayane/BufferQueue.h"
 
 using namespace Ayane;
 

@@ -8,6 +8,17 @@ cmake_minimum_required(VERSION 2.8)
 
 project(Ayane)
 
+macro(add_prefix list_name prefix)
+	set(${list_name}_TMP)
+
+	foreach(l IN LISTS ${list_name})
+		list(APPEND ${list_name}_TMP ${prefix}${l} )
+	endforeach()
+
+	set(${list_name} "${${list_name}_TMP}")
+	unset(${list_name}_TMP)
+endmacro()
+
 # C++11
 
 # Force XCode to use C++11 since it ignores CXX flags.
@@ -26,9 +37,7 @@ add_definitions(-Wall
 
 #add_definitions( -pedantic )
 
-# Include source directory in includes so we can use absolute paths to include headers
-include_directories( ${CMAKE_SOURCE_DIR} )
-
+include_directories( "${CMAKE_SOURCE_DIR}/include" )
 
 # Platform dependent sources
 
@@ -45,11 +54,11 @@ if( ${CMAKE_SYSTEM_NAME} MATCHES "Darwin" )
 		)
 
 	set( ayane_host_SRCS
-		host/mac/coreaudioendpoint.cpp
+		src/outputs/CoreAudioOutput.cxx
 		)
 	
 	set( ayane_host_HDRS
-		host/mac/coreaudioendpoint.h
+		src/outputs/CoreAudioOutput.h
 		)
 		
 elseif( ${CMAKE_SYSTEM_NAME} MATCHES "Linux" )
@@ -66,70 +75,66 @@ endif()
 # Platform independent sources
 
 set(ayane_SRCS
-    alignedmemory.cpp
-	buffer.cpp
-	bufferfactory.cpp
-	bufferframes.cpp
-	bufferformat.cpp
-	bufferlength.cpp
-    bufferpool.cpp
-	bufferqueue.cpp
-	clock.cpp
-	clockprovider.cpp
-	channels.cpp
-	duration.cpp
-	formats.cpp
-	messagebus.cpp
-	pipeline.cpp
-	rawbuffer.cpp
-	stage.cpp
-    trace.cpp
+    AlignedMemory.cxx
+	Buffer.cxx
+	BufferFactory.cxx
+	BufferFrames.cxx
+	BufferFormat.cxx
+	BufferLength.cxx
+    BufferPool.cxx
+	BufferQueue.cxx
+	Clock.cxx
+	ClockProvider.cxx
+	Channels.cxx
+	Duration.cxx
+	SampleFormats.cxx
+	MessageBus.cxx
+	Pipeline.cxx
+	RawBuffer.cxx
+	Stage.cxx
+    Trace.cxx
   	)
+  	
 
 set(ayane_HDRS
-    alignedmemory.h
-    attributes.h
-	buffer.h
-	bufferfactory.h
-	bufferframes.h
-	bufferformat.h
-	bufferlength.h
-    bufferpool.h
-	bufferqueue.h
-	clock.h
-	clockprovider.h
-    dpointer.h
-	channels.h
-	duration.h
-	formats.h
-    macros.h
-	messagebus.h
-	pipeline.h
-	rawbuffer.h
-	stage.h
-    trace.h
+    AlignedMemory.h
+    Attributes.h
+	Buffer.h
+	BufferFactory.h
+	BufferFrames.h
+	BufferFormat.h
+	BufferLength.h
+    BufferPool.h
+	BufferQueue.h
+	Channels.h
+	Clock.h
+	ClockProvider.h
+	Duration.h
+    DPointer.h
+	SampleFormats.h
+    Macros.h
+	MessageBus.h
+	Pipeline.h
+	RawBuffer.h
+	Stage.h
+    Trace.h
 	)
 
-set(ayane_host_common_SRCS
-	)
-	
-set(ayane_host_common_HDRS
-	host/endpoint.h
-	)
+add_prefix(ayane_SRCS "src/")
+add_prefix(ayane_HDRS "include/Ayane/")
 
 ### Targets ###
 
-add_library( ayane SHARED
+add_library(ayane SHARED
+			# Platform independent sources
 			${ayane_SRCS} 
 			${ayane_HDRS} 
 			
-			# Host portion of library.
+			# Host dependent sources
 			${ayane_host_SRCS}
-			${ayane_host_common_SRCS}
 			${ayane_host_HDRS}
-			${ayane_host_common_HDRS}
 			
-			# Host libraries
+			# Host libraries (for frameworks)
 			${ayane_host_LIBS}
 			)
 

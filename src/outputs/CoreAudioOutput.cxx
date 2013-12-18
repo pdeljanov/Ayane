@@ -9,11 +9,11 @@
  *
  */
 
-#include "coreaudioendpoint.h"
-#include "messagebus.h"
+#include "CoreAudioOutput.h"
 
-#include "trace.h"
-#include "rawbuffer.h"
+#include "Ayane/MessageBus.h"
+#include "Ayane/Trace.h"
+#include "Ayane/RawBuffer.h"
 
 using namespace Ayane;
 
@@ -29,7 +29,7 @@ namespace {
                               AudioBufferList				*ioData)
 	{
         
-        CoreAudioEndpoint *endpoint = static_cast<CoreAudioEndpoint*>(inRefCon);
+        CoreAudioOutput *endpoint = static_cast<CoreAudioOutput*>(inRefCon);
         
 		return endpoint->render(ioActionFlags, inTimeStamp, inBusNumber,
                                 inNumberFrames, ioData);
@@ -44,7 +44,7 @@ namespace {
 								 AudioBufferList            *ioData)
 	{
 
-        CoreAudioEndpoint *endpoint = static_cast<CoreAudioEndpoint*>(inRefCon);
+        CoreAudioOutput *endpoint = static_cast<CoreAudioOutput*>(inRefCon);
         
 		return endpoint->renderNotify(ioActionFlags, inTimeStamp, inBusNumber,
                                     inNumberFrames, ioData);
@@ -55,7 +55,7 @@ namespace {
 
 
 
-CoreAudioEndpoint::CoreAudioEndpoint() : Stage(),
+CoreAudioOutput::CoreAudioOutput() : Stage(),
     mAUGraph(nullptr), mAUOutput(-1), mAUChannelLayout(nullptr), mBuffers(2)
 {
     
@@ -87,11 +87,11 @@ CoreAudioEndpoint::CoreAudioEndpoint() : Stage(),
     addSink("input");
 }
 
-CoreAudioEndpoint::~CoreAudioEndpoint() {
+CoreAudioOutput::~CoreAudioOutput() {
 }
 
 
-SharingMode CoreAudioEndpoint::sharingMode() const {
+SharingMode CoreAudioOutput::sharingMode() const {
     
 	AudioObjectPropertyAddress propertyAddress;
     
@@ -121,7 +121,7 @@ SharingMode CoreAudioEndpoint::sharingMode() const {
 	return ( hogPID == getpid() ? kExclusive : kShared );
 }
 
-bool CoreAudioEndpoint::setSharingMode(SharingMode mode)
+bool CoreAudioOutput::setSharingMode(SharingMode mode)
 {
     AudioDeviceID deviceID;
 	if(!outputDeviceID(deviceID)) {
@@ -213,7 +213,7 @@ bool CoreAudioEndpoint::setSharingMode(SharingMode mode)
 }
 
 
-bool CoreAudioEndpoint::createOutputDeviceUID(CFStringRef& deviceUID) const
+bool CoreAudioOutput::createOutputDeviceUID(CFStringRef& deviceUID) const
 {
 	AudioDeviceID deviceID;
     
@@ -244,7 +244,7 @@ bool CoreAudioEndpoint::createOutputDeviceUID(CFStringRef& deviceUID) const
 	return true;
 }
 
-bool CoreAudioEndpoint::setOutputDeviceUID(CFStringRef deviceUID)
+bool CoreAudioOutput::setOutputDeviceUID(CFStringRef deviceUID)
 {
 	AudioDeviceID deviceID = kAudioDeviceUnknown;
     
@@ -311,7 +311,7 @@ bool CoreAudioEndpoint::setOutputDeviceUID(CFStringRef deviceUID)
 	return setOutputDeviceID(deviceID);
 }
 
-bool CoreAudioEndpoint::outputDeviceID(AudioDeviceID& deviceID) const
+bool CoreAudioOutput::outputDeviceID(AudioDeviceID& deviceID) const
 {
 	AudioUnit au = nullptr;
 	OSStatus result = AUGraphNodeInfo(mAUGraph, mAUOutput, nullptr, &au);
@@ -340,7 +340,7 @@ bool CoreAudioEndpoint::outputDeviceID(AudioDeviceID& deviceID) const
 	return true;
 }
 
-bool CoreAudioEndpoint::setOutputDeviceID(AudioDeviceID deviceID)
+bool CoreAudioOutput::setOutputDeviceID(AudioDeviceID deviceID)
 {
 	if(kAudioDeviceUnknown == deviceID)
 		return false;
@@ -371,7 +371,7 @@ bool CoreAudioEndpoint::setOutputDeviceID(AudioDeviceID deviceID)
 	return true;
 }
 
-bool CoreAudioEndpoint::outputDeviceSampleRate(Float64& sampleRate) const
+bool CoreAudioOutput::outputDeviceSampleRate(Float64& sampleRate) const
 {
 	AudioDeviceID deviceID;
     
@@ -403,7 +403,7 @@ bool CoreAudioEndpoint::outputDeviceSampleRate(Float64& sampleRate) const
 	return true;
 }
 
-bool CoreAudioEndpoint::setOutputDeviceSampleRate(Float64 sampleRate)
+bool CoreAudioOutput::setOutputDeviceSampleRate(Float64 sampleRate)
 {
 	AudioDeviceID deviceID;
     
@@ -460,7 +460,7 @@ bool CoreAudioEndpoint::setOutputDeviceSampleRate(Float64 sampleRate)
 
 
 
-bool CoreAudioEndpoint::openOutput() {
+bool CoreAudioOutput::openOutput() {
     
     OSStatus result = NewAUGraph(&mAUGraph);
     
@@ -637,7 +637,7 @@ bool CoreAudioEndpoint::openOutput() {
 
 
 
-bool CoreAudioEndpoint::closeOutput()
+bool CoreAudioOutput::closeOutput()
 {
 	Boolean graphIsRunning = false;
 	OSStatus result = AUGraphIsRunning(mAUGraph, &graphIsRunning);
@@ -696,7 +696,7 @@ bool CoreAudioEndpoint::closeOutput()
 	return true;
 }
 
-bool CoreAudioEndpoint::startOutput()
+bool CoreAudioOutput::startOutput()
 {
 	// We don't want to start output in the middle of a buffer modification
 	/*std::unique_lock<std::mutex> lock(mMutex, std::try_to_lock);
@@ -714,7 +714,7 @@ bool CoreAudioEndpoint::startOutput()
 	return true;
 }
 
-bool CoreAudioEndpoint::stopOutput()
+bool CoreAudioOutput::stopOutput()
 {
 	OSStatus result = AUGraphStop(mAUGraph);
     
@@ -727,7 +727,7 @@ bool CoreAudioEndpoint::stopOutput()
 	return true;
 }
 
-bool CoreAudioEndpoint::isOutputRunning() const
+bool CoreAudioOutput::isOutputRunning() const
 {
 	Boolean isRunning = false;
 	OSStatus result = AUGraphIsRunning(mAUGraph, &isRunning);
@@ -741,7 +741,7 @@ bool CoreAudioEndpoint::isOutputRunning() const
 	return isRunning;
 }
 
-bool CoreAudioEndpoint::resetOutput()
+bool CoreAudioOutput::resetOutput()
 {
     
 	UInt32 nodeCount = 0;
@@ -788,7 +788,7 @@ bool CoreAudioEndpoint::resetOutput()
 }
 
 
-bool CoreAudioEndpoint::saveGraphInteractions(std::vector<AUNodeInteraction> &interactions ) {
+bool CoreAudioOutput::saveGraphInteractions(std::vector<AUNodeInteraction> &interactions ) {
     
     UInt32 interactionCount = 0;
     
@@ -816,7 +816,7 @@ bool CoreAudioEndpoint::saveGraphInteractions(std::vector<AUNodeInteraction> &in
     return true;
 }
 
-bool CoreAudioEndpoint::restoreGraphInteractions(std::vector<AUNodeInteraction> &interactions) {
+bool CoreAudioOutput::restoreGraphInteractions(std::vector<AUNodeInteraction> &interactions) {
     
     UInt32 interactionCount = interactions.size();
     
@@ -867,7 +867,7 @@ bool CoreAudioEndpoint::restoreGraphInteractions(std::vector<AUNodeInteraction> 
 }
 
 
-bool CoreAudioEndpoint::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
+bool CoreAudioOutput::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
                                                   const void *propertyData,
                                                   UInt32 propertyDataSize)
 {
@@ -996,7 +996,7 @@ bool CoreAudioEndpoint::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID
 }
 
 
-bool CoreAudioEndpoint::setAUGraphSampleRateAndChannelLayout(Float64 sampleRate, UInt32 channelsPerFrame) {
+bool CoreAudioOutput::setAUGraphSampleRateAndChannelLayout(Float64 sampleRate, UInt32 channelsPerFrame) {
     
 	OSStatus result;
     
@@ -1137,7 +1137,10 @@ bool CoreAudioEndpoint::setAUGraphSampleRateAndChannelLayout(Float64 sampleRate,
     
 }
 
-bool CoreAudioEndpoint::setAUOutputChannelLayout(AudioChannelLayout *channelLayout) {
+bool CoreAudioOutput::setAUOutputChannelLayout(AudioChannelLayout *channelLayout,
+                                                 SInt32 **outChannelMap,
+                                                 UInt32 *outChannelMapCount)
+{
     
     // Do nothing if channelLayout is null.
     if(channelLayout == nullptr) {
@@ -1239,14 +1242,6 @@ bool CoreAudioEndpoint::setAUOutputChannelLayout(AudioChannelLayout *channelLayo
 		channelMap[preferredChannelsForStereo[0] - 1] = 0;
 		channelMap[preferredChannelsForStereo[1] - 1] = 1;
         
-        TRACE_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
-        << "Using stereo map:" << std::endl;
-        
-		for(UInt32 i = 0; i < outputFormat.mChannelsPerFrame; ++i) {
-			TRACE_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
-            << "  " << i << " -> " << channelMap[i] << std::endl;
-        }
-        
 		// Set the channel map
 		result = AudioUnitSetProperty(outputUnit,
                                       kAudioOutputUnitProperty_ChannelMap,
@@ -1254,15 +1249,16 @@ bool CoreAudioEndpoint::setAUOutputChannelLayout(AudioChannelLayout *channelLayo
                                       0,
                                       channelMap,
                                       (UInt32)sizeof(channelMap));
-        
-        delete channelMap;
-        
+
 		if(result != noErr) {
             ERROR_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
             << "ErrorCode=" << result << std::endl;
+            delete channelMap;
 			return false;
 		}
-        
+
+        *outChannelMap = channelMap;
+        *outChannelMapCount = outputFormat.mChannelsPerFrame;
 	}
 	// Multichannel
 	else {
@@ -1336,15 +1332,6 @@ bool CoreAudioEndpoint::setAUOutputChannelLayout(AudioChannelLayout *channelLayo
 			return false;
 		}
         
-        
-        TRACE_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
-        << "Using multichannel map:" << std::endl;
-        
-		for(UInt32 i = 0; i < channelCount; ++i) {
-			TRACE_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
-            << "  " << i << " -> " << channelMap.get()[i] << std::endl;
-        }
-        
 		// Set the channel map
 		result = AudioUnitSetProperty(outputUnit,
                                       kAudioOutputUnitProperty_ChannelMap,
@@ -1358,12 +1345,15 @@ bool CoreAudioEndpoint::setAUOutputChannelLayout(AudioChannelLayout *channelLayo
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
+        
+        *outChannelMap = channelMap.release();
+        *outChannelMapCount = channelCount;
 	}
     
     return true;
 }
 
-AudioBufferList * CoreAudioEndpoint::allocateABL(UInt32 channelsPerFrame,
+AudioBufferList * CoreAudioOutput::allocateABL(UInt32 channelsPerFrame,
                                                  UInt32 bytesPerSample,
                                                  bool interleaved,
                                                  UInt32 capacityFrames)
@@ -1389,12 +1379,12 @@ AudioBufferList * CoreAudioEndpoint::allocateABL(UInt32 channelsPerFrame,
 }
 
 
-Stage::Sink *CoreAudioEndpoint::input()
+Stage::Sink *CoreAudioOutput::input()
 {
     return mSinks["input"].get();
 }
 
-bool CoreAudioEndpoint::beginPlayback() {
+bool CoreAudioOutput::beginPlayback() {
     
     // Open output.
     if( !openOutput() ) {
@@ -1421,7 +1411,7 @@ bool CoreAudioEndpoint::beginPlayback() {
     return true;
 }
 
-bool CoreAudioEndpoint::stoppedPlayback() {
+bool CoreAudioOutput::stoppedPlayback() {
     
     stopOutput();
     closeOutput();
@@ -1441,7 +1431,7 @@ bool CoreAudioEndpoint::stoppedPlayback() {
 
 
 
-void CoreAudioEndpoint::process( ProcessIOFlags *ioFlags ){
+void CoreAudioOutput::process( ProcessIOFlags *ioFlags ){
     
     ManagedBuffer buffer;
 
@@ -1472,11 +1462,11 @@ void CoreAudioEndpoint::process( ProcessIOFlags *ioFlags ){
     
 }
 
-bool CoreAudioEndpoint::reconfigureIO() {
+bool CoreAudioOutput::reconfigureIO() {
     return true;
 }
 
-bool CoreAudioEndpoint::reconfigureInputFormat(const Sink &sink,
+bool CoreAudioOutput::reconfigureInputFormat(const Sink &sink,
                                                const BufferFormat &format){
     
 #pragma unused(sink)
@@ -1537,37 +1527,60 @@ bool CoreAudioEndpoint::reconfigureInputFormat(const Sink &sink,
         return false;
     }
     
-    // TODO: Add more channel layouts.
-    // Stereo channel layout.
-    int numberChannelDescriptions = 0;
     
+    
+    // Create a CoreAudio channel layout with 0 channel descriptions and try to
+    // configure it.
     size_t layoutSize = offsetof(AudioChannelLayout, mChannelDescriptions) +
-        (numberChannelDescriptions * sizeof(AudioChannelDescription));
+        (0 * sizeof(AudioChannelDescription));
     
+    // Allocate a channel layout.
     std::unique_ptr<AudioChannelLayout> channelLayout((AudioChannelLayout*)malloc(layoutSize));
+    
+    // Zero channel layout
     memset(channelLayout.get(), 0, layoutSize);
+
+    // Use the channel bitmap because CoreAudio and Ayane channel bitmaps map
+    // the same way.
+    channelLayout->mChannelLayoutTag = kAudioChannelLayoutTag_UseChannelBitmap;
+    channelLayout->mChannelBitmap = format.channels();
     
-    channelLayout->mChannelLayoutTag = kAudioChannelLayoutTag_Stereo;
+    UInt32 channelCount = 0;
+    SInt32 *channelMap = nullptr;
     
-    if( !setAUOutputChannelLayout(channelLayout.get()) ){
+    // Set the channel layout and get the input channel to output channel map.
+    if( !setAUOutputChannelLayout(channelLayout.get(),
+                                  &channelMap,
+                                  &channelCount) )
+    {
         ERROR_THIS("CoreAudioEndpoint::reconfigureSink")
         << "Setting the channel layout failed." << std::endl;
         return false;
     }
     
-    /* Update the raw buffer */
+    /* Update the raw buffer using the channel IO map. */
     mAudioBufferListWrapper.reset(new RawBuffer(mMaxFramesPerSlice,
-                                                format.channelCount(),
+                                                channelCount,
                                                 kFloat32,
                                                 true));
     
-    mAudioBufferListWrapper->mBuffers[0].mChannel = kFrontLeft;
-    mAudioBufferListWrapper->mBuffers[1].mChannel = kFrontRight;
+    TRACE_THIS("CoreAudioEndpoint::reconfigureInputFormat")
+    << "Using channel map:" << std::endl;
     
+    for(UInt32 i = 0; i < channelCount; ++i) {
+        TRACE_THIS("CoreAudioEndpoint::reconfigureInputFormat")
+        << "  " << i << " -> " << channelMap[i] << std::endl;
+        
+        // Again, CoreAudio's channel mapping is the same as Ayane's so we can
+        // directly determine the channel map.  In this case, i is the CoreAudio ABL
+        // list index.
+        mAudioBufferListWrapper->mBuffers[i].mChannel = static_cast<Channel>(1<<channelMap[i]);
+    }
+
+    delete channelMap;
     
     /* Update the clock. */
     mPeriodPerFrame = (1.0 / format.sampleRate());
-    
     
     /* Clear the buffer queue. */
     mCurrentBuffer.reset();
@@ -1603,12 +1616,12 @@ bool CoreAudioEndpoint::reconfigureInputFormat(const Sink &sink,
 
 
 
-ClockProvider &CoreAudioEndpoint::clockProvider() {
+ClockProvider &CoreAudioOutput::clockProvider() {
     return mClockProvider;
 }
 
 
-OSStatus CoreAudioEndpoint::renderNotify(AudioUnitRenderActionFlags *ioActionFlags,
+OSStatus CoreAudioOutput::renderNotify(AudioUnitRenderActionFlags *ioActionFlags,
                                          const AudioTimeStamp *inTimeStamp,
                                          UInt32 inBusNumber,
                                          UInt32 inNumberFrames,
@@ -1641,7 +1654,7 @@ OSStatus CoreAudioEndpoint::renderNotify(AudioUnitRenderActionFlags *ioActionFla
 
 
 
-OSStatus CoreAudioEndpoint::render(AudioUnitRenderActionFlags *ioActionFlags,
+OSStatus CoreAudioOutput::render(AudioUnitRenderActionFlags *ioActionFlags,
                                    const AudioTimeStamp	 *inTimeStamp,
                                    UInt32 inBusNumber,
                                    UInt32 inNumberFrames,
@@ -1650,11 +1663,12 @@ OSStatus CoreAudioEndpoint::render(AudioUnitRenderActionFlags *ioActionFlags,
 #pragma unused(inTimeStamp)
 #pragma unused(inBusNumber)
     
-    // Update the RawBuffer wrapper to point to the new AudioBufferList buffers.
-    mAudioBufferListWrapper->mBuffers[0].mBuffer = ioData->mBuffers[0].mData;
-    mAudioBufferListWrapper->mBuffers[1].mBuffer = ioData->mBuffers[1].mData;
+    for(UInt32 i = 0; i < ioData->mNumberBuffers; ++i) {
+        mAudioBufferListWrapper->mBuffers[i].mBuffer = ioData->mBuffers[i].mData;
+    }
+    
     mAudioBufferListWrapper->mFrames = inNumberFrames;
-    mAudioBufferListWrapper->reset();
+    mAudioBufferListWrapper->reset();  // Beware of .reset(), this kills the unique_ptr!
         
     // Copy any left over data from the current buffer.
     if( mCurrentBuffer && (mCurrentBuffer->available() > 0) ) {

@@ -6,8 +6,8 @@
  *
  */
 
-#include "rawbuffer.h"
-#include "buffer.h"
+#include "Ayane/Rawbuffer.h"
+#include "Ayane/Buffer.h"
 
 using namespace Ayane;
 

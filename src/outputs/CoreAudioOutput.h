@@ -12,9 +12,9 @@
 #include <CoreAudio/CoreAudioTypes.h>
 #include <AudioToolbox/AudioToolbox.h>
 
-#include "clockprovider.h"
-#include "rawbuffer.h"
-#include "stage.h"
+#include "Ayane/ClockProvider.h"
+#include "Ayane/RawBuffer.h"
+#include "Ayane/Stage.h"
 
 #include <vector>
 #include <memory>
@@ -29,12 +29,12 @@ namespace Ayane {
     } SharingMode;
     
     
-    class CoreAudioEndpoint : public Stage {
+    class CoreAudioOutput : public Stage {
         
     public:
         
-        CoreAudioEndpoint();
-        ~CoreAudioEndpoint();
+        CoreAudioOutput();
+        ~CoreAudioOutput();
         
         /**
          *  Gets the output sharing mode.
@@ -55,7 +55,7 @@ namespace Ayane {
         ClockProvider &clockProvider();
         
     private:
-        AYANE_DISALLOW_COPY_AND_ASSIGN(CoreAudioEndpoint);
+        AYANE_DISALLOW_COPY_AND_ASSIGN(CoreAudioOutput);
         
         class BufferingCriteria;
         
@@ -101,7 +101,9 @@ namespace Ayane {
         bool setAUGraphSampleRateAndChannelLayout(Float64 sampleRate,
                                                   UInt32 channelsPerFrame);
         
-        bool setAUOutputChannelLayout(AudioChannelLayout *channelLayout);
+        bool setAUOutputChannelLayout(AudioChannelLayout *channelLayout,
+                                      SInt32 **outChannelMap,
+                                      UInt32 *outChannelMapCount);
         
         AudioBufferList *allocateABL(UInt32 channelsPerFrame,
                                      UInt32 bytesPerSample,

@@ -6,10 +6,10 @@
  *
  */
 
-#include "pipeline.h"
-#include "messagebus.h"
-#include "stage.h"
-#include "trace.h"
+#include "Ayane/Pipeline.h"
+#include "Ayane/MessageBus.h"
+#include "Ayane/Stage.h"
+#include "Ayane/Trace.h"
 
 using namespace Ayane;
 

@@ -6,8 +6,8 @@
  *
  */
 
-#include "messagebus.h"
-#include "trace.h"
+#include "Ayane/MessageBus.h"
+#include "Ayane/Trace.h"
 
 #include <vector>
 #include <map>

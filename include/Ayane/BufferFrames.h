@@ -10,9 +10,9 @@
 #define AYANE_AUDIO_BUFFERFRAMES_H_
 
 #include <cstdio>
-#include "attributes.h"
-#include "bufferformat.h"
-#include "formats.h"
+#include "Ayane/Attributes.h"
+#include "Ayane/BufferFormat.h"
+#include "Ayane/SampleFormats.h"
 
 namespace Ayane {
     
