@@ -1,0 +1,50 @@
+# Project specific
+/build/
+/deps/
+
+# OSX
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# KDE/KDevelop
+.kdev4/
+.directory/
+
+# Visual Studio
+*.suo
+*.user
+*.sln.docstates
+
+# Build
+[Oo]bj/
+[Bb]in/
+
+
+# Compiled Object files
+*.slo
+*.lo
+*.ko
+*.o
+
+# Compiled Dynamic libraries
+
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
