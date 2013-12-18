@@ -154,7 +154,7 @@ namespace Ayane {
     
     /**
      *  CanonicalChannels is a utility class for dealing with audio channels
-     *  in Stargazer Audio specific ordering.
+     *  in Ayane specific ordering.
      */
     class CanonicalChannels {
         

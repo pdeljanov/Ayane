@@ -14,7 +14,7 @@
 using namespace Ayane;
 
 // Allow compiler flag to disable ANSI colour coding.
-#ifndef STARGAZER_TRACE_NO_ANSI
+#ifndef AYANE_TRACE_NO_ANSI
 
 #define ANSI_BOLD "\033[1m"
 
