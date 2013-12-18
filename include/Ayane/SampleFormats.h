@@ -6,10 +6,10 @@
  *
  */
 
-#ifndef AYANE_AUDIO_SAMPLEFORMATS_H_
-#define AYANE_AUDIO_SAMPLEFORMATS_H_
+#ifndef AYANE_SAMPLEFORMATS_H_
+#define AYANE_SAMPLEFORMATS_H_
 
-#include "attributes.h"
+#include "Ayane/Attributes.h"
 #include <cstdint>
 #include <cmath>
 

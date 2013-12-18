@@ -6,12 +6,13 @@
  *
  */
 
-#ifndef AYANE_AUDIO_CHANNELS_H_
-#define AYANE_AUDIO_CHANNELS_H_
+#ifndef AYANE_CHANNELS_H_
+#define AYANE_CHANNELS_H_
 
-#include "attributes.h"
-#include "macros.h"
 #include <cstdint>
+
+#include "Ayane/Attributes.h"
+#include "Ayane/Macros.h"
 
 namespace Ayane {
     

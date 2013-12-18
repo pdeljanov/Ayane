@@ -6,8 +6,8 @@
  *
  */
 
-#ifndef AYANE_AUDIO_RAWBUFFER_H_
-#define AYANE_AUDIO_RAWBUFFER_H_
+#ifndef AYANE_RAWBUFFER_H_
+#define AYANE_RAWBUFFER_H_
 
 #include <cstddef>
 

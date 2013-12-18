@@ -6,8 +6,8 @@
  *
  */
 
-#ifndef AYANE_AUDIO_BUFFERFORMAT_H_
-#define AYANE_AUDIO_BUFFERFORMAT_H_
+#ifndef AYANE_BUFFERFORMAT_H_
+#define AYANE_BUFFERFORMAT_H_
 
 #include "Ayane/Channels.h"
 #include "Ayane/SampleFormats.h"

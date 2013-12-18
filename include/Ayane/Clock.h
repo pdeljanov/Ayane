@@ -6,13 +6,14 @@
  *
  */
 
-#ifndef AYANE_AUDIO_CLOCK_H_
-#define AYANE_AUDIO_CLOCK_H_
+#ifndef AYANE_CLOCK_H_
+#define AYANE_CLOCK_H_
 
-#include "macros.h"
 #include <list>
 #include <mutex>
 #include <condition_variable>
+
+#include "Ayane/Macros.h"
 
 namespace Ayane {
     

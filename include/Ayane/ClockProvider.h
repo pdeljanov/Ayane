@@ -6,10 +6,10 @@
  *
  */
 
-#ifndef AYANE_AUDIO_CLOCKPROVIDER_H_
-#define AYANE_AUDIO_CLOCKPROVIDER_H_
+#ifndef AYANE_CLOCKPROVIDER_H_
+#define AYANE_CLOCKPROVIDER_H_
 
-#include "clock.h"
+#include "Ayane/Clock.h"
 
 namespace Ayane {
     
@@ -43,7 +43,6 @@ namespace Ayane {
         AYANE_DISALLOW_COPY_AND_ASSIGN(ClockProvider);
         
         std::list<Clock*> mSubscribers;
-        
     };
     
 }

@@ -6,16 +6,16 @@
  *
  */
 
-#ifndef AYANE_AUDIO_ABSTRACTSTAGE_H_
-#define AYANE_AUDIO_ABSTRACTSTAGE_H_
+#ifndef AYANE_STAGE_H_
+#define AYANE_STAGE_H_
 
 // No one knows the names of the trampled flowers.
 // Fallen birds await the next wind before they try again.
 
-#include "bufferpool.h"
-#include "bufferqueue.h"
-#include "clockprovider.h"
-#include "pipeline.h"
+#include "Ayane/BufferPool.h"
+#include "Ayane/BufferQueue.h"
+#include "Ayane/ClockProvider.h"
+#include "Ayane/Pipeline.h"
 
 #include <memory>
 #include <mutex>

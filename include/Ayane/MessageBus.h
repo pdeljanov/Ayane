@@ -6,15 +6,15 @@
  *
  */
 
-#ifndef AYANE_AUDIO_ABSTRACTMESSAGEBUS_H_
-#define AYANE_AUDIO_ABSTRACTMESSAGEBUS_H_
+#ifndef AYANE_MESSAGEBUS_H_
+#define AYANE_MESSAGEBUS_H_
 
 #include <string>
 #include <functional>
 
-#include "macros.h"
-#include "dpointer.h"
-#include "duration.h"
+#include "Ayane/Macros.h"
+#include "Ayane/DPointer.h"
+#include "Ayane/Duration.h"
 
 namespace Ayane {
     

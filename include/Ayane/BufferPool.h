@@ -6,14 +6,14 @@
  *
  */
 
-#ifndef AYANE_AUDIO_BUFFERPOOL_H_
-#define AYANE_AUDIO_BUFFERPOOL_H_
-
-#include "bufferfactory.h"
+#ifndef AYANE_BUFFERPOOL_H_
+#define AYANE_BUFFERPOOL_H_
 
 #include <memory>
 #include <mutex>
 #include <stack>
+
+#include "Ayane/BufferFactory.h"
 
 namespace Ayane {
     

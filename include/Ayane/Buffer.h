@@ -6,17 +6,16 @@
  *
  */
 
-#ifndef AYANE_AUDIO_BUFFER_H_
-#define AYANE_AUDIO_BUFFER_H_
+#ifndef AYANE_BUFFER_H_
+#define AYANE_BUFFER_H_
 
 #include <cstddef>
 
 #include "Ayane/Macros.h"
 #include "Ayane/Attributes.h"
-#include "Ayane/bufferLength.h"
-#include "Ayane/bufferFormat.h"
-#include "Ayane/bufferFrames.h"
-
+#include "Ayane/BufferLength.h"
+#include "Ayane/BufferFormat.h"
+#include "Ayane/BufferFrames.h"
 #include "Ayane/Duration.h"
 #include "Ayane/SampleFormats.h"
 

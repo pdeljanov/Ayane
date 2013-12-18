@@ -6,13 +6,14 @@
  *
  */
 
-#ifndef AYANE_AUDIO_PIPELINE_H_
-#define AYANE_AUDIO_PIPELINE_H_
+#ifndef AYANE_PIPELINE_H_
+#define AYANE_PIPELINE_H_
 
 #include <memory>
 #include <vector>
-#include "macros.h"
-#include "dpointer.h"
+
+#include "Ayane/Macros.h"
+#include "Ayane/DPointer.h"
 
 namespace Ayane {
     

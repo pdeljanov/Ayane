@@ -6,16 +6,15 @@
  *
  */
 
-#ifndef AYANE_AUDIO_BUFFERQUEUE_H_
-#define AYANE_AUDIO_BUFFERQUEUE_H_
+#ifndef AYANE_BUFFERQUEUE_H_
+#define AYANE_BUFFERQUEUE_H_
 
 #include <stddef.h>
-
-#include "bufferpool.h"
-
 #include <vector>
 #include <memory>
 #include <atomic>
+
+#include "Ayane/BufferPool.h"
 
 namespace Ayane {
     

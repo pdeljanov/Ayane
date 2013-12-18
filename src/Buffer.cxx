@@ -6,11 +6,11 @@
  *
  */
 
+#include <algorithm>
+
 #include "Ayane/Buffer.h"
 #include "Ayane/RawBuffer.h"
 #include "Ayane/AlignedMemory.h"
-
-#include <algorithm>
 
 using namespace Ayane;
 

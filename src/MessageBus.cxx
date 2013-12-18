@@ -6,14 +6,14 @@
  *
  */
 
-#include "Ayane/MessageBus.h"
-#include "Ayane/Trace.h"
-
 #include <vector>
 #include <map>
 #include <thread>
 #include <mutex>
 #include <atomic>
+
+#include "Ayane/MessageBus.h"
+#include "Ayane/Trace.h"
 
 using namespace Ayane;
 
@@ -21,9 +21,9 @@ namespace Ayane {
                 
     class MessageBusPrivate {
     public:
+        
         MessageBusPrivate();
         ~MessageBusPrivate();
-        
         
         void post(MessageBase *message);
         MessageBase *flush();

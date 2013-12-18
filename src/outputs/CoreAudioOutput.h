@@ -6,8 +6,8 @@
  *
  */
 
-#ifndef AYANE_AUDIO_HOST_MAC_COREAUDIOENDPOINT_H_
-#define AYANE_AUDIO_HOST_MAC_COREAUDIOENDPOINT_H_
+#ifndef AYANE_COREAUDIOOUTPUT_H_
+#define AYANE_COREAUDIOOUTPUT_H_
 
 #include <CoreAudio/CoreAudioTypes.h>
 #include <AudioToolbox/AudioToolbox.h>

@@ -6,9 +6,9 @@
  *
  */
 
-#include "Ayane/Duration.h"
-
 #include <cmath>
+
+#include "Ayane/Duration.h"
 
 using namespace Ayane;
 

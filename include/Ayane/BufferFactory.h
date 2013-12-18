@@ -6,8 +6,8 @@
  *
  */
 
-#ifndef AYANE_AUDIO_BUFFERFACTORY_H_
-#define AYANE_AUDIO_BUFFERFACTORY_H_
+#ifndef AYANE_BUFFERFACTORY_H_
+#define AYANE_BUFFERFACTORY_H_
 
 #include "Ayane/Buffer.h"
 

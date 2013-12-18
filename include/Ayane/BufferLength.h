@@ -6,8 +6,8 @@
  *
  */
 
-#ifndef AYANE_AUDIO_BUFFERLENGTH_H_
-#define AYANE_AUDIO_BUFFERLENGTH_H_
+#ifndef AYANE_BUFFERLENGTH_H_
+#define AYANE_BUFFERLENGTH_H_
 
 #include "Ayane/SampleFormats.h"
 #include "Ayane/Duration.h"

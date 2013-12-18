@@ -6,10 +6,10 @@
  *
  */
 
-#include "Ayane/Trace.h"
-
 #include <sstream>
 #include <iostream>
+
+#include "Ayane/Trace.h"
 
 using namespace Ayane;
 

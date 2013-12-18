@@ -6,8 +6,8 @@
  *
  */
 
-#ifndef AYANE_AUDIO_DURATION_H_
-#define AYANE_AUDIO_DURATION_H_
+#ifndef AYANE_DURATION_H_
+#define AYANE_DURATION_H_
 
 namespace Ayane {
     

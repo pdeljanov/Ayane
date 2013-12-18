@@ -7,9 +7,9 @@
  */
 
 #ifndef AYANE_TRACE_H_
-#define Ayane_TRACE_H_
+#define AYANE_TRACE_H_
 
-#include "macros.h"
+#include "Ayane/Macros.h"
 #include <ostream>
 
 
