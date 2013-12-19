@@ -9,11 +9,108 @@
  *
  */
 
-#include "CoreAudioOutput.h"
+#include "Ayane/Outputs/CoreAudioOutput.h"
+
+#include <CoreAudio/CoreAudioTypes.h>
+#include <AudioToolbox/AudioToolbox.h>
+#include <vector>
+#include <memory>
 
 #include "Ayane/MessageBus.h"
 #include "Ayane/Trace.h"
 #include "Ayane/RawBuffer.h"
+
+namespace Ayane {
+    
+    class CoreAudioOutputPrivate {
+    public:
+        
+        CoreAudioOutputPrivate();
+        ~CoreAudioOutputPrivate();
+        
+        bool createOutputDeviceUID(CFStringRef& deviceUID) const;
+        bool setOutputDeviceUID(CFStringRef deviceUID);
+        
+        bool outputDeviceID(AudioDeviceID& deviceID) const;
+        bool setOutputDeviceID(AudioDeviceID deviceID);
+        
+        bool outputDeviceSampleRate(Float64& sampleRate) const;
+        bool setOutputDeviceSampleRate(Float64 sampleRate);
+        
+        bool openOutput();
+        bool closeOutput();
+        
+        bool startOutput();
+        bool stopOutput();
+        
+        bool resetOutput();
+        
+        bool isOutputRunning() const;
+        
+        
+        bool saveGraphInteractions(std::vector<AUNodeInteraction> &interactions);
+        bool restoreGraphInteractions(std::vector<AUNodeInteraction> &interactions);
+        
+        bool setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
+                                       const void *propertyData,
+                                       UInt32 propertyDataSize);
+        
+        bool setAUGraphSampleRateAndChannelLayout(Float64 sampleRate,
+                                                  UInt32 channelsPerFrame);
+        
+        bool setAUOutputChannelLayout(AudioChannelLayout *channelLayout,
+                                      SInt32 **outChannelMap,
+                                      UInt32 *outChannelMapCount);
+        
+        AudioBufferList *allocateABL(UInt32 channelsPerFrame,
+                                     UInt32 bytesPerSample,
+                                     bool interleaved,
+                                     UInt32 capacityFrames);
+        
+        
+        // AUNode render callback.
+        OSStatus render(AudioUnitRenderActionFlags		*ioActionFlags,
+                        const AudioTimeStamp			    *inTimeStamp,
+                        UInt32							 inBusNumber,
+                        UInt32							 inNumberFrames,
+                        AudioBufferList					*ioData);
+        
+        // AUGraph render notification.
+        OSStatus renderNotify(AudioUnitRenderActionFlags *ioActionFlags,
+                              const AudioTimeStamp		 *inTimeStamp,
+                              UInt32                      inBusNumber,
+                              UInt32						  inNumberFrames,
+                              AudioBufferList            *ioData);
+        
+        
+        // Audio Unit graph
+        AUGraph mAUGraph;
+        
+        // Output node.
+        AUNode mAUOutput;
+        
+        // Audio format for the AU graph.
+        AudioStreamBasicDescription	mAUFormat;
+        
+        // Channel layout for the AU graph.
+        std::unique_ptr<AudioChannelLayout>	mAUChannelLayout;
+        
+        UInt32 mMaxFramesPerSlice;
+        
+        double mPeriodPerFrame;
+        double mClockPeriod;
+        double mNextClockTick;
+        double mCurrentClockTick;
+        
+        ClockProvider mClockProvider;
+        
+        BufferQueue mBuffers;
+        
+        std::unique_ptr<RawBuffer> mAudioBufferListWrapper;
+        ManagedBuffer mCurrentBuffer;
+    };
+    
+}
 
 using namespace Ayane;
 
@@ -29,7 +126,7 @@ namespace {
                               AudioBufferList				*ioData)
 	{
         
-        CoreAudioOutput *endpoint = static_cast<CoreAudioOutput*>(inRefCon);
+        CoreAudioOutputPrivate *endpoint = static_cast<CoreAudioOutputPrivate*>(inRefCon);
         
 		return endpoint->render(ioActionFlags, inTimeStamp, inBusNumber,
                                 inNumberFrames, ioData);
@@ -43,11 +140,11 @@ namespace {
 								 UInt32						inNumberFrames,
 								 AudioBufferList            *ioData)
 	{
-
-        CoreAudioOutput *endpoint = static_cast<CoreAudioOutput*>(inRefCon);
+        
+        CoreAudioOutputPrivate *endpoint = static_cast<CoreAudioOutputPrivate*>(inRefCon);
         
 		return endpoint->renderNotify(ioActionFlags, inTimeStamp, inBusNumber,
-                                    inNumberFrames, ioData);
+                                      inNumberFrames, ioData);
 	}
     
 }
@@ -55,12 +152,14 @@ namespace {
 
 
 
-CoreAudioOutput::CoreAudioOutput() : Stage(),
-    mAUGraph(nullptr), mAUOutput(-1), mAUChannelLayout(nullptr), mBuffers(2)
+CoreAudioOutputPrivate::CoreAudioOutputPrivate() :
+mAUGraph(nullptr),
+mAUOutput(-1),
+mAUChannelLayout(nullptr),
+mBuffers(2)
 {
-    
     /*
-     * The AU graph will always use the canonical Core Audio format since the 
+     * The AU graph will always use the canonical Core Audio format since the
      * buffers flowing through the audio engine are in an agnostic format.
      */
     
@@ -78,142 +177,13 @@ CoreAudioOutput::CoreAudioOutput() : Stage(),
 	mAUFormat.mBytesPerFrame		= mAUFormat.mBytesPerPacket * mAUFormat.mFramesPerPacket;
 	
 	mAUFormat.mReserved			= 0;
-    
-    /*
-     *  Setup Stage.
-     */
-    
-    // Add output sink to stage.
-    addSink("input");
 }
 
-CoreAudioOutput::~CoreAudioOutput() {
+CoreAudioOutputPrivate::~CoreAudioOutputPrivate() {
+    
 }
 
-
-SharingMode CoreAudioOutput::sharingMode() const {
-    
-	AudioObjectPropertyAddress propertyAddress;
-    
-    propertyAddress.mSelector	= kAudioDevicePropertyHogMode;
-    propertyAddress.mScope		= kAudioObjectPropertyScopeGlobal;
-    propertyAddress.mElement    = kAudioObjectPropertyElementMaster;
-    
-	pid_t hogPID = static_cast<pid_t>(-1);
-	UInt32 dataSize = sizeof(hogPID);
-    
-	AudioDeviceID deviceID;
-	if(!outputDeviceID(deviceID)) {
-		return kShared;
-    }
-    
-	OSStatus result = AudioObjectGetPropertyData(deviceID,
-                                                 &propertyAddress,
-                                                 0,
-                                                 nullptr,
-                                                 &dataSize,
-                                                 &hogPID);
-    
-	if(kAudioHardwareNoError != result) {
-		return kShared;
-	}
-    
-	return ( hogPID == getpid() ? kExclusive : kShared );
-}
-
-bool CoreAudioOutput::setSharingMode(SharingMode mode)
-{
-    AudioDeviceID deviceID;
-	if(!outputDeviceID(deviceID)) {
-		return false;
-    }
-    
-	AudioObjectPropertyAddress propertyAddress;
-    propertyAddress.mSelector   = kAudioDevicePropertyHogMode;
-    propertyAddress.mScope      = kAudioObjectPropertyScopeGlobal;
-    propertyAddress.mElement    = kAudioObjectPropertyElementMaster;
-    
-	pid_t pid = static_cast<pid_t>(-1);
-	UInt32 dataSize = sizeof(pid);
-    
-	OSStatus result = AudioObjectGetPropertyData(deviceID,
-                                                 &propertyAddress,
-                                                 0,
-                                                 nullptr,
-                                                 &dataSize,
-                                                 &pid);
-
-	if(kAudioHardwareNoError != result) {
-        ERROR_THIS("CoreAudioEndpoint::setSharingMode")
-        << "ErrorCode=" << result << std::endl;
-		return false;
-	}
-    
-    // Get the application's PID.
-    pid_t appPID = getpid();
-    
-    if( mode == kShared ) {
-        
-        // Device is not being used exclusively.
-        if( pid == static_cast<pid_t>(-1) ) {
-            return true;
-        }
-        // Check if the device is exclusive to another application. Can't do
-        // anything.
-        else if( pid != appPID ) {
-            WARNING_THIS("CoreAudioEndpoint::setSharingMode") <<
-            "Another PID is hogging the audio device." << std::endl;
-            return false;
-        }
-
-        // Set pid to be shared.
-        pid = static_cast<pid_t>(-1);
-    }
-    else {
-        
-        // Device is being used exclusively.
-        if( pid == appPID ) {
-            return true;
-        }
-        // Check if the device is exclusive to another application. Can't do
-        // anything.
-        else if( pid != appPID ) {
-            WARNING_THIS("CoreAudioEndpoint::setSharingMode") <<
-            "Another PID is hogging the audio device." << std::endl;
-            return false;
-        }
-        
-        // Set pid to us.
-        pid = appPID;
-    }
-    
-	bool restartIO = isOutputRunning();
-	if(restartIO) {
-		stopOutput();
-    }
-    
-	result = AudioObjectSetPropertyData(deviceID,
-                                        &propertyAddress,
-                                        0,
-                                        nullptr,
-                                        sizeof(pid),
-                                        &pid);
-    
-	if(kAudioHardwareNoError != result) {
-        ERROR_THIS("CoreAudioEndpoint::setSharingMode")
-        << "ErrorCode=" << result << std::endl;
-		return false;
-	}
-    
-	if(restartIO && !isOutputRunning()) {
-		startOutput();
-    }
-    
-	return true;
-}
-
-
-bool CoreAudioOutput::createOutputDeviceUID(CFStringRef& deviceUID) const
+bool CoreAudioOutputPrivate::createOutputDeviceUID(CFStringRef& deviceUID) const
 {
 	AudioDeviceID deviceID;
     
@@ -236,15 +206,15 @@ bool CoreAudioOutput::createOutputDeviceUID(CFStringRef& deviceUID) const
                                                  &deviceUID);
     
 	if(kAudioHardwareNoError != result) {
-        ERROR_THIS("CoreAudioEndpoint::createOutputDeviceUID")
+        ERROR_THIS("CoreAudioOutputPrivate::createOutputDeviceUID")
         << "ErrorCode=" << result << std::endl;
 		return nullptr;
 	}
-
+    
 	return true;
 }
 
-bool CoreAudioOutput::setOutputDeviceUID(CFStringRef deviceUID)
+bool CoreAudioOutputPrivate::setOutputDeviceUID(CFStringRef deviceUID)
 {
 	AudioDeviceID deviceID = kAudioDeviceUnknown;
     
@@ -267,7 +237,7 @@ bool CoreAudioOutput::setOutputDeviceUID(CFStringRef deviceUID)
                                                      &deviceID);
         
 		if(kAudioHardwareNoError != result) {
-            ERROR_THIS("CoreAudioEndpoint::setOutputDeviceUID")
+            ERROR_THIS("CoreAudioOutputPrivate::setOutputDeviceUID")
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
@@ -276,7 +246,7 @@ bool CoreAudioOutput::setOutputDeviceUID(CFStringRef deviceUID)
 	else {
         
 		AudioObjectPropertyAddress propAddr;
-
+        
         propAddr.mSelector	= kAudioHardwarePropertyDeviceForUID;
         propAddr.mScope		= kAudioObjectPropertyScopeGlobal;
         propAddr.mElement	= kAudioObjectPropertyElementMaster;
@@ -296,14 +266,14 @@ bool CoreAudioOutput::setOutputDeviceUID(CFStringRef deviceUID)
                                                      &translation);
         
 		if(kAudioHardwareNoError != result) {
-            ERROR_THIS("CoreAudioEndpoint::setOutputDeviceUID")
+            ERROR_THIS("CoreAudioOutputPrivate::setOutputDeviceUID")
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
 	}
     
 	if(kAudioDeviceUnknown == deviceID) {
-        ERROR_THIS("CoreAudioEndpoint::setOutputDeviceUID")
+        ERROR_THIS("CoreAudioOutputPrivate::setOutputDeviceUID")
         << "Unknown device ID." << std::endl;
 		return false;
     }
@@ -311,13 +281,13 @@ bool CoreAudioOutput::setOutputDeviceUID(CFStringRef deviceUID)
 	return setOutputDeviceID(deviceID);
 }
 
-bool CoreAudioOutput::outputDeviceID(AudioDeviceID& deviceID) const
+bool CoreAudioOutputPrivate::outputDeviceID(AudioDeviceID& deviceID) const
 {
 	AudioUnit au = nullptr;
 	OSStatus result = AUGraphNodeInfo(mAUGraph, mAUOutput, nullptr, &au);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::outputDeviceID")
+        ERROR_THIS("CoreAudioOutputPrivate::outputDeviceID")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -332,7 +302,7 @@ bool CoreAudioOutput::outputDeviceID(AudioDeviceID& deviceID) const
                                   &dataSize);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::outputDeviceID")
+        ERROR_THIS("CoreAudioOutputPrivate::outputDeviceID")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -340,7 +310,7 @@ bool CoreAudioOutput::outputDeviceID(AudioDeviceID& deviceID) const
 	return true;
 }
 
-bool CoreAudioOutput::setOutputDeviceID(AudioDeviceID deviceID)
+bool CoreAudioOutputPrivate::setOutputDeviceID(AudioDeviceID deviceID)
 {
 	if(kAudioDeviceUnknown == deviceID)
 		return false;
@@ -349,7 +319,7 @@ bool CoreAudioOutput::setOutputDeviceID(AudioDeviceID deviceID)
 	OSStatus result = AUGraphNodeInfo(mAUGraph, mAUOutput, nullptr, &au);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::setOutputDeviceID")
+        ERROR_THIS("CoreAudioOutputPrivate::setOutputDeviceID")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -363,7 +333,7 @@ bool CoreAudioOutput::setOutputDeviceID(AudioDeviceID deviceID)
                                   (UInt32)sizeof(deviceID));
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::setOutputDeviceID")
+        ERROR_THIS("CoreAudioOutputPrivate::setOutputDeviceID")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -371,7 +341,7 @@ bool CoreAudioOutput::setOutputDeviceID(AudioDeviceID deviceID)
 	return true;
 }
 
-bool CoreAudioOutput::outputDeviceSampleRate(Float64& sampleRate) const
+bool CoreAudioOutputPrivate::outputDeviceSampleRate(Float64& sampleRate) const
 {
 	AudioDeviceID deviceID;
     
@@ -395,7 +365,7 @@ bool CoreAudioOutput::outputDeviceSampleRate(Float64& sampleRate) const
                                                  &sampleRate);
     
 	if(kAudioHardwareNoError != result) {
-        ERROR_THIS("CoreAudioEndpoint::outputDeviceSampleRate")
+        ERROR_THIS("CoreAudioOutputPrivate::outputDeviceSampleRate")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -403,7 +373,7 @@ bool CoreAudioOutput::outputDeviceSampleRate(Float64& sampleRate) const
 	return true;
 }
 
-bool CoreAudioOutput::setOutputDeviceSampleRate(Float64 sampleRate)
+bool CoreAudioOutputPrivate::setOutputDeviceSampleRate(Float64 sampleRate)
 {
 	AudioDeviceID deviceID;
     
@@ -429,7 +399,7 @@ bool CoreAudioOutput::setOutputDeviceSampleRate(Float64 sampleRate)
                                                  &dataSize,
                                                  &currentSampleRate);
 	if(kAudioHardwareNoError != result) {
-        ERROR_THIS("CoreAudioEndpoint::setOutputDeviceSampleRate")
+        ERROR_THIS("CoreAudioOutputPrivate::setOutputDeviceSampleRate")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -450,7 +420,7 @@ bool CoreAudioOutput::setOutputDeviceSampleRate(Float64 sampleRate)
                                         &sampleRate);
     
 	if(kAudioHardwareNoError != result) {
-        ERROR_THIS("CoreAudioEndpoint::setOutputDeviceSampleRate")
+        ERROR_THIS("CoreAudioOutputPrivate::setOutputDeviceSampleRate")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -458,14 +428,12 @@ bool CoreAudioOutput::setOutputDeviceSampleRate(Float64 sampleRate)
 	return true;
 }
 
-
-
-bool CoreAudioOutput::openOutput() {
+bool CoreAudioOutputPrivate::openOutput() {
     
     OSStatus result = NewAUGraph(&mAUGraph);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::openOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::openOutput")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -484,13 +452,13 @@ bool CoreAudioOutput::openOutput() {
     
 	if(result != noErr) {
         
-        ERROR_THIS("CoreAudioEndpoint::openOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::openOutput")
         << "ErrorCode=" << result << std::endl;
         
 		result = DisposeAUGraph(mAUGraph);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::openOutput")
+            ERROR_THIS("CoreAudioOutputPrivate::openOutput")
             << "ErrorCode=" << result << std::endl;
         }
         
@@ -501,19 +469,19 @@ bool CoreAudioOutput::openOutput() {
     
 	// Install the input callback
 	/*
-
-    
-	if(result != noErr) {
-        
-        // TODO: Log.
-		
-        if(DisposeAUGraph(mAUGraph) != noErr) {
-            // TODO: Log.
-        }
-        
-		mAUGraph = nullptr;
-		return false;
-	}
+     
+     
+     if(result != noErr) {
+     
+     // TODO: Log.
+     
+     if(DisposeAUGraph(mAUGraph) != noErr) {
+     // TODO: Log.
+     }
+     
+     mAUGraph = nullptr;
+     return false;
+     }
      */
     
 	// Open the graph
@@ -521,11 +489,11 @@ bool CoreAudioOutput::openOutput() {
     
 	if(result != noErr) {
         
-        ERROR_THIS("CoreAudioEndpoint::openOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::openOutput")
         << "ErrorCode=" << result << std::endl;
         
 		if(DisposeAUGraph(mAUGraph) != noErr){
-            ERROR_THIS("CoreAudioEndpoint::openOutput")
+            ERROR_THIS("CoreAudioOutputPrivate::openOutput")
             << "ErrorCode=" << result << std::endl;
         }
         
@@ -540,11 +508,11 @@ bool CoreAudioOutput::openOutput() {
     
     if(result != noErr) {
         
-        ERROR_THIS("CoreAudioEndpoint::openOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::openOutput")
         << "ErrorCode=" << result << std::endl;
         
 		if(DisposeAUGraph(mAUGraph) != noErr){
-            ERROR_THIS("CoreAudioEndpoint::openOutput")
+            ERROR_THIS("CoreAudioOutputPrivate::openOutput")
             << "ErrorCode=" << result << std::endl;
         }
         
@@ -554,7 +522,7 @@ bool CoreAudioOutput::openOutput() {
     
     // Install the output render callback (do this manually!).
     AURenderCallbackStruct cbs = { auRenderCallback, this };
-
+    
     AudioUnitSetProperty(au,
                          kAudioUnitProperty_SetRenderCallback,
                          kAudioUnitScope_Global,
@@ -564,11 +532,11 @@ bool CoreAudioOutput::openOutput() {
     
     if(result != noErr) {
         
-        ERROR_THIS("CoreAudioEndpoint::openOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::openOutput")
         << "ErrorCode=" << result << std::endl;
         
 		if(DisposeAUGraph(mAUGraph) != noErr){
-            ERROR_THIS("CoreAudioEndpoint::openOutput")
+            ERROR_THIS("CoreAudioOutputPrivate::openOutput")
             << "ErrorCode=" << result << std::endl;
         }
         
@@ -581,11 +549,11 @@ bool CoreAudioOutput::openOutput() {
     
 	if(result != noErr) {
         
-        ERROR_THIS("CoreAudioEndpoint::openOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::openOutput")
         << "ErrorCode=" << result << std::endl;
         
 		if(DisposeAUGraph(mAUGraph) != noErr){
-            ERROR_THIS("CoreAudioEndpoint::openOutput")
+            ERROR_THIS("CoreAudioOutputPrivate::openOutput")
             << "ErrorCode=" << result << std::endl;
         }
         
@@ -602,11 +570,11 @@ bool CoreAudioOutput::openOutput() {
                                   &dataSize);
 	if(result != noErr) {
         
-        ERROR_THIS("CoreAudioEndpoint::openOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::openOutput")
         << "ErrorCode=" << result << std::endl;
         
 		if(DisposeAUGraph(mAUGraph) != noErr){
-            ERROR_THIS("CoreAudioEndpoint::openOutput")
+            ERROR_THIS("CoreAudioOutputPrivate::openOutput")
             << "ErrorCode=" << result << std::endl;
         }
         
@@ -614,36 +582,34 @@ bool CoreAudioOutput::openOutput() {
 		return false;
 	}
     
-
+    
     // Initialize the graph
 	result = AUGraphInitialize(mAUGraph);
     
 	if(result != noErr) {
         
-        ERROR_THIS("CoreAudioEndpoint::openOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::openOutput")
         << "ErrorCode=" << result << std::endl;
         
 		if(DisposeAUGraph(mAUGraph) != noErr){
-            ERROR_THIS("CoreAudioEndpoint::openOutput")
+            ERROR_THIS("CoreAudioOutputPrivate::openOutput")
             << "ErrorCode=" << result << std::endl;
         }
         
 		mAUGraph = nullptr;
 		return false;
 	}
-
+    
     return true;
 }
 
-
-
-bool CoreAudioOutput::closeOutput()
+bool CoreAudioOutputPrivate::closeOutput()
 {
 	Boolean graphIsRunning = false;
 	OSStatus result = AUGraphIsRunning(mAUGraph, &graphIsRunning);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::closeOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::closeOutput")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -652,7 +618,7 @@ bool CoreAudioOutput::closeOutput()
 		result = AUGraphStop(mAUGraph);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::closeOutput")
+            ERROR_THIS("CoreAudioOutputPrivate::closeOutput")
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
@@ -661,7 +627,7 @@ bool CoreAudioOutput::closeOutput()
 	Boolean graphIsInitialized = false;
 	result = AUGraphIsInitialized(mAUGraph, &graphIsInitialized);
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::closeOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::closeOutput")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -670,7 +636,7 @@ bool CoreAudioOutput::closeOutput()
 		result = AUGraphUninitialize(mAUGraph);
 		
         if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::closeOutput")
+            ERROR_THIS("CoreAudioOutputPrivate::closeOutput")
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
@@ -678,35 +644,35 @@ bool CoreAudioOutput::closeOutput()
     
 	result = AUGraphClose(mAUGraph);
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::closeOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::closeOutput")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
     
 	result = DisposeAUGraph(mAUGraph);
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::closeOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::closeOutput")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
     
 	mAUGraph = nullptr;
 	mAUOutput = -1;
-
+    
 	return true;
 }
 
-bool CoreAudioOutput::startOutput()
+bool CoreAudioOutputPrivate::startOutput()
 {
 	// We don't want to start output in the middle of a buffer modification
 	/*std::unique_lock<std::mutex> lock(mMutex, std::try_to_lock);
-	if(!lock)
-		return false;
-    */
+     if(!lock)
+     return false;
+     */
     
 	OSStatus result = AUGraphStart(mAUGraph);
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::startOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::startOutput")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -714,41 +680,41 @@ bool CoreAudioOutput::startOutput()
 	return true;
 }
 
-bool CoreAudioOutput::stopOutput()
+bool CoreAudioOutputPrivate::stopOutput()
 {
 	OSStatus result = AUGraphStop(mAUGraph);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::stopOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::stopOutput")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
-
+    
 	return true;
 }
 
-bool CoreAudioOutput::isOutputRunning() const
+bool CoreAudioOutputPrivate::isOutputRunning() const
 {
 	Boolean isRunning = false;
 	OSStatus result = AUGraphIsRunning(mAUGraph, &isRunning);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::isOutputRunning")
+        ERROR_THIS("CoreAudioOutputPrivate::isOutputRunning")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
-
+    
 	return isRunning;
 }
 
-bool CoreAudioOutput::resetOutput()
+bool CoreAudioOutputPrivate::resetOutput()
 {
     
 	UInt32 nodeCount = 0;
 	OSStatus result = AUGraphGetNodeCount(mAUGraph, &nodeCount);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::resetOutput")
+        ERROR_THIS("CoreAudioOutputPrivate::resetOutput")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -760,7 +726,7 @@ bool CoreAudioOutput::resetOutput()
 		result = AUGraphGetIndNode(mAUGraph, i, &node);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::resetOutput")
+            ERROR_THIS("CoreAudioOutputPrivate::resetOutput")
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
@@ -770,7 +736,7 @@ bool CoreAudioOutput::resetOutput()
 		result = AUGraphNodeInfo(mAUGraph, node, nullptr, &au);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::resetOutput")
+            ERROR_THIS("CoreAudioOutputPrivate::resetOutput")
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
@@ -778,7 +744,7 @@ bool CoreAudioOutput::resetOutput()
 		result = AudioUnitReset(au, kAudioUnitScope_Global, 0);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::resetOutput")
+            ERROR_THIS("CoreAudioOutputPrivate::resetOutput")
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
@@ -787,27 +753,26 @@ bool CoreAudioOutput::resetOutput()
 	return true;
 }
 
-
-bool CoreAudioOutput::saveGraphInteractions(std::vector<AUNodeInteraction> &interactions ) {
+bool CoreAudioOutputPrivate::saveGraphInteractions(std::vector<AUNodeInteraction> &interactions ) {
     
     UInt32 interactionCount = 0;
     
 	OSStatus result = AUGraphGetNumberOfInteractions(mAUGraph, &interactionCount);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::saveGraphInteractions")
+        ERROR_THIS("CoreAudioOutputPrivate::saveGraphInteractions")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
-
+    
     interactions.reserve(interactionCount);
     
     for(UInt32 i = 0; i < interactionCount; ++i) {
-
+        
 		result = AUGraphGetInteractionInfo(mAUGraph, i, &interactions[i]);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::saveGraphInteractions")
+            ERROR_THIS("CoreAudioOutputPrivate::saveGraphInteractions")
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
@@ -816,7 +781,7 @@ bool CoreAudioOutput::saveGraphInteractions(std::vector<AUNodeInteraction> &inte
     return true;
 }
 
-bool CoreAudioOutput::restoreGraphInteractions(std::vector<AUNodeInteraction> &interactions) {
+bool CoreAudioOutputPrivate::restoreGraphInteractions(std::vector<AUNodeInteraction> &interactions) {
     
     UInt32 interactionCount = interactions.size();
     
@@ -826,7 +791,7 @@ bool CoreAudioOutput::restoreGraphInteractions(std::vector<AUNodeInteraction> &i
         
 		switch(interactions[i].nodeInteractionType) {
                 
-            // Reestablish the connection
+                // Reestablish the connection
 			case kAUNodeInteraction_Connection:
 			{
 				result = AUGraphConnectNodeInput(mAUGraph,
@@ -836,14 +801,14 @@ bool CoreAudioOutput::restoreGraphInteractions(std::vector<AUNodeInteraction> &i
 												 interactions[i].nodeInteraction.connection.destInputNumber);
 				
 				if(result != noErr) {
-                    ERROR_THIS("CoreAudioEndpoint::restoreGraphInteractions")
+                    ERROR_THIS("CoreAudioOutputPrivate::restoreGraphInteractions")
                     << "ErrorCode=" << result << std::endl;
 					return false;
 				}
                 
 				break;
 			}
-            // Reestablish the input callback
+                // Reestablish the input callback
 			case kAUNodeInteraction_InputCallback:
 			{
 				result = AUGraphSetNodeInputCallback(mAUGraph,
@@ -852,7 +817,7 @@ bool CoreAudioOutput::restoreGraphInteractions(std::vector<AUNodeInteraction> &i
 													 &interactions[i].nodeInteraction.inputCallback.cback);
                 
 				if(result != noErr) {
-                    ERROR_THIS("CoreAudioEndpoint::restoreGraphInteractions")
+                    ERROR_THIS("CoreAudioOutputPrivate::restoreGraphInteractions")
                     << "ErrorCode=" << result << std::endl;
 					return false;
 				}
@@ -866,10 +831,9 @@ bool CoreAudioOutput::restoreGraphInteractions(std::vector<AUNodeInteraction> &i
     
 }
 
-
-bool CoreAudioOutput::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
-                                                  const void *propertyData,
-                                                  UInt32 propertyDataSize)
+bool CoreAudioOutputPrivate::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
+                                                       const void *propertyData,
+                                                       UInt32 propertyDataSize)
 {
     
 	if(nullptr == propertyData || 0 >= propertyDataSize)
@@ -880,7 +844,7 @@ bool CoreAudioOutput::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
 	OSStatus result = AUGraphGetNodeCount(mAUGraph, &nodeCount);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::setPropertyOnAUGraphNodes")
+        ERROR_THIS("CoreAudioOutputPrivate::setPropertyOnAUGraphNodes")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -893,7 +857,7 @@ bool CoreAudioOutput::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
 		result = AUGraphGetIndNode(mAUGraph, i, &node);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::setPropertyOnAUGraphNodes")
+            ERROR_THIS("CoreAudioOutputPrivate::setPropertyOnAUGraphNodes")
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
@@ -903,7 +867,7 @@ bool CoreAudioOutput::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
 		result = AUGraphNodeInfo(mAUGraph, node, nullptr, &au);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::setPropertyOnAUGraphNodes")
+            ERROR_THIS("CoreAudioOutputPrivate::setPropertyOnAUGraphNodes")
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
@@ -919,7 +883,7 @@ bool CoreAudioOutput::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
                                           propertyDataSize);
             
 			if(result != noErr) {
-                ERROR_THIS("CoreAudioEndpoint::setPropertyOnAUGraphNodes")
+                ERROR_THIS("CoreAudioOutputPrivate::setPropertyOnAUGraphNodes")
                 << "ErrorCode=" << result << std::endl;
 				return false;
 			}
@@ -938,13 +902,13 @@ bool CoreAudioOutput::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
                                           &dataSize);
             
 			if(result != noErr) {
-                ERROR_THIS("CoreAudioEndpoint::setPropertyOnAUGraphNodes")
+                ERROR_THIS("CoreAudioOutputPrivate::setPropertyOnAUGraphNodes")
                 << "ErrorCode=" << result << std::endl;
 				return false;
 			}
             
 			for(UInt32 j = 0; j < elementCount; ++j) {
-
+                
 				result = AudioUnitSetProperty(au,
                                               propertyID,
                                               kAudioUnitScope_Input,
@@ -952,7 +916,7 @@ bool CoreAudioOutput::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
                                               propertyData,
                                               propertyDataSize);
 				if(result != noErr) {
-                    ERROR_THIS("CoreAudioEndpoint::setPropertyOnAUGraphNodes")
+                    ERROR_THIS("CoreAudioOutputPrivate::setPropertyOnAUGraphNodes")
                     << "ErrorCode=" << result << std::endl;
 					return false;
 				}
@@ -969,13 +933,13 @@ bool CoreAudioOutput::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
                                           &dataSize);
             
 			if(result != noErr) {
-                ERROR_THIS("CoreAudioEndpoint::setPropertyOnAUGraphNodes")
+                ERROR_THIS("CoreAudioOutputPrivate::setPropertyOnAUGraphNodes")
                 << "ErrorCode=" << result << std::endl;
 				return false;
 			}
             
 			for(UInt32 j = 0; j < elementCount; ++j) {
-
+                
 				result = AudioUnitSetProperty(au,
                                               propertyID,
                                               kAudioUnitScope_Output,
@@ -984,7 +948,7 @@ bool CoreAudioOutput::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
                                               propertyDataSize);
                 
 				if(result != noErr) {
-                    ERROR_THIS("CoreAudioEndpoint::setPropertyOnAUGraphNodes")
+                    ERROR_THIS("CoreAudioOutputPrivate::setPropertyOnAUGraphNodes")
                     << "ErrorCode=" << result << std::endl;
 					return false;
 				}
@@ -996,13 +960,15 @@ bool CoreAudioOutput::setPropertyOnAUGraphNodes(AudioUnitPropertyID propertyID,
 }
 
 
-bool CoreAudioOutput::setAUGraphSampleRateAndChannelLayout(Float64 sampleRate, UInt32 channelsPerFrame) {
+bool CoreAudioOutputPrivate::setAUGraphSampleRateAndChannelLayout(Float64 sampleRate,
+                                                                  UInt32 channelsPerFrame)
+{
     
 	OSStatus result;
     
 	// ========================================
 	// Save the interaction information and then clear all the connections
-
+    
     std::vector<AUNodeInteraction> interactions;
     if(!saveGraphInteractions(interactions)) {
         return false;
@@ -1010,11 +976,11 @@ bool CoreAudioOutput::setAUGraphSampleRateAndChannelLayout(Float64 sampleRate, U
     
 	result = AUGraphClearConnections(mAUGraph);
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::setAUGraphSampleRateAndChannelLayout")
+        ERROR_THIS("CoreAudioOutputPrivate::setAUGraphSampleRateAndChannelLayout")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
-
+    
 	// ========================================
 	// Attempt to set the new stream format
     
@@ -1033,7 +999,7 @@ bool CoreAudioOutput::setAUGraphSampleRateAndChannelLayout(Float64 sampleRate, U
                                       &mAUFormat,
                                       sizeof(mAUFormat)))
         {
-            ERROR_THIS("CoreAudioEndpoint::setAUGraphSampleRateAndChannelLayout")
+            ERROR_THIS("CoreAudioOutputPrivate::setAUGraphSampleRateAndChannelLayout")
             << "Could not restore previous configuration." << std::endl;
 		}
         
@@ -1055,7 +1021,7 @@ bool CoreAudioOutput::setAUGraphSampleRateAndChannelLayout(Float64 sampleRate, U
 	result = AUGraphNodeInfo(mAUGraph, mAUOutput, nullptr, &au);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::setAUGraphSampleRateAndChannelLayout")
+        ERROR_THIS("CoreAudioOutputPrivate::setAUGraphSampleRateAndChannelLayout")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -1070,7 +1036,7 @@ bool CoreAudioOutput::setAUGraphSampleRateAndChannelLayout(Float64 sampleRate, U
                                   &inputSampleRate,
                                   &dataSize);
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::setAUGraphSampleRateAndChannelLayout")
+        ERROR_THIS("CoreAudioOutputPrivate::setAUGraphSampleRateAndChannelLayout")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -1085,7 +1051,7 @@ bool CoreAudioOutput::setAUGraphSampleRateAndChannelLayout(Float64 sampleRate, U
                                   &outputSampleRate,
                                   &dataSize);
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::setAUGraphSampleRateAndChannelLayout")
+        ERROR_THIS("CoreAudioOutputPrivate::setAUGraphSampleRateAndChannelLayout")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -1115,7 +1081,7 @@ bool CoreAudioOutput::setAUGraphSampleRateAndChannelLayout(Float64 sampleRate, U
                                   &currentMaxFrames,
                                   &dataSize);
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::setAUGraphSampleRateAndChannelLayout")
+        ERROR_THIS("CoreAudioOutputPrivate::setAUGraphSampleRateAndChannelLayout")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -1137,9 +1103,9 @@ bool CoreAudioOutput::setAUGraphSampleRateAndChannelLayout(Float64 sampleRate, U
     
 }
 
-bool CoreAudioOutput::setAUOutputChannelLayout(AudioChannelLayout *channelLayout,
-                                                 SInt32 **outChannelMap,
-                                                 UInt32 *outChannelMapCount)
+bool CoreAudioOutputPrivate::setAUOutputChannelLayout(AudioChannelLayout *channelLayout,
+                                                      SInt32 **outChannelMap,
+                                                      UInt32 *outChannelMapCount)
 {
     
     // Do nothing if channelLayout is null.
@@ -1152,7 +1118,7 @@ bool CoreAudioOutput::setAUOutputChannelLayout(AudioChannelLayout *channelLayout
 	OSStatus result = AUGraphNodeInfo(mAUGraph, mAUOutput, nullptr, &outputUnit);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
+        ERROR_THIS("CoreAudioOutputPrivate::setAUOutputChannelLayout")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
@@ -1166,14 +1132,15 @@ bool CoreAudioOutput::setAUOutputChannelLayout(AudioChannelLayout *channelLayout
                                   0);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
+        ERROR_THIS("CoreAudioOutputPrivate::setAUOutputChannelLayout")
         << "ErrorCode=" << result << std::endl;
 		return false;
 	}
     
-
+    
     // Test if the output channel layout is Stereo.
 	AudioChannelLayout stereoChannelLayout;
+    memset(&stereoChannelLayout, 0, sizeof(AudioChannelLayout));
     stereoChannelLayout.mChannelLayoutTag = kAudioChannelLayoutTag_Stereo;
     
 	AudioChannelLayout* layouts[] = {
@@ -1191,10 +1158,10 @@ bool CoreAudioOutput::setAUOutputChannelLayout(AudioChannelLayout *channelLayout
                                     &channelLayoutIsStereo);
     
 	if(result != noErr){
-        ERROR_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
+        ERROR_THIS("CoreAudioOutputPrivate::setAUOutputChannelLayout")
         << "ErrorCode=" << result << std::endl;
     }
-
+    
     
 	// Stereo
 	if(channelLayoutIsStereo) {
@@ -1211,7 +1178,7 @@ bool CoreAudioOutput::setAUOutputChannelLayout(AudioChannelLayout *channelLayout
                                       &preferredChannelsForStereoSize);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
+            ERROR_THIS("CoreAudioOutputPrivate::setAUOutputChannelLayout")
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
@@ -1228,7 +1195,7 @@ bool CoreAudioOutput::setAUOutputChannelLayout(AudioChannelLayout *channelLayout
                                       &propertySize);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
+            ERROR_THIS("CoreAudioOutputPrivate::setAUOutputChannelLayout")
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
@@ -1249,14 +1216,14 @@ bool CoreAudioOutput::setAUOutputChannelLayout(AudioChannelLayout *channelLayout
                                       0,
                                       channelMap,
                                       (UInt32)sizeof(channelMap));
-
+        
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
+            ERROR_THIS("CoreAudioOutputPrivate::setAUOutputChannelLayout")
             << "ErrorCode=" << result << std::endl;
             delete channelMap;
 			return false;
 		}
-
+        
         *outChannelMap = channelMap;
         *outChannelMapCount = outputFormat.mChannelsPerFrame;
 	}
@@ -1274,14 +1241,13 @@ bool CoreAudioOutput::setAUOutputChannelLayout(AudioChannelLayout *channelLayout
                                           nullptr);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
+            ERROR_THIS("CoreAudioOutputPrivate::setAUOutputChannelLayout")
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
         
         // Allocate an array for the device's preferred channel list.
-        std::unique_ptr<AudioChannelLayout> devicePreferredChannelLayout(
-            static_cast<AudioChannelLayout*>(malloc(devicePreferredChannelLayoutSize)));
+        std::unique_ptr<AudioChannelLayout> devicePreferredChannelLayout(static_cast<AudioChannelLayout*>(malloc(devicePreferredChannelLayoutSize)));
         
 		result = AudioUnitGetProperty(outputUnit,
                                       kAudioDevicePropertyPreferredChannelLayout,
@@ -1291,7 +1257,7 @@ bool CoreAudioOutput::setAUOutputChannelLayout(AudioChannelLayout *channelLayout
                                       &devicePreferredChannelLayoutSize);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
+            ERROR_THIS("CoreAudioOutputPrivate::setAUOutputChannelLayout")
             << "ErrorCode=" << result << std::endl;
 			return false;
 		}
@@ -1305,30 +1271,31 @@ bool CoreAudioOutput::setAUOutputChannelLayout(AudioChannelLayout *channelLayout
                                         devicePreferredChannelLayout.get(),
                                         &dataSize,
                                         &channelCount);
-		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
-            << "ErrorCode=" << result << std::endl;
+        
+        if(result != noErr) {
+            ERROR_THIS("CoreAudioOutputPrivate::setAUOutputChannelLayout")
+            << "GetProperty=kAudioFormatProperty_NumberOfChannelsForLayout, ErrorCode=" << result << std::endl;
 			return false;
 		}
         
-		// Create the channel map.
-        std::unique_ptr<SInt32> channelMap( new SInt32[channelCount] );
-		dataSize = (UInt32)sizeof(channelMap);
-        
-		AudioChannelLayout *channelLayouts [] = {
-			channelLayout,
-			devicePreferredChannelLayout.get()
+		AudioChannelLayout* channelLayouts[] = {
+            channelLayout,
+            devicePreferredChannelLayout.get()
 		};
+
+        std::unique_ptr<SInt32> channelMap(new SInt32[channelCount]);
+		dataSize = (UInt32)(sizeof(SInt32) * channelCount);
         
 		result = AudioFormatGetProperty(kAudioFormatProperty_ChannelMap,
                                         sizeof(channelLayouts),
                                         channelLayouts,
                                         &dataSize,
                                         channelMap.get());
-
-		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
-            << "ErrorCode=" << result << std::endl;
+        
+        if(result != noErr) {
+            ERROR_THIS("CoreAudioOutputPrivate::setAUOutputChannelLayout")
+            << "GetProperty=kAudioFormatProperty_ChannelMap"
+            << ", ErrorCode=" << result << std::endl;
 			return false;
 		}
         
@@ -1338,11 +1305,12 @@ bool CoreAudioOutput::setAUOutputChannelLayout(AudioChannelLayout *channelLayout
                                       kAudioUnitScope_Input,
                                       0,
                                       channelMap.get(),
-                                      (UInt32)sizeof(channelMap));
+                                      dataSize);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::setAUOutputChannelLayout")
-            << "ErrorCode=" << result << std::endl;
+            ERROR_THIS("CoreAudioOutputPrivate::setAUOutputChannelLayout")
+            << "SetProperty=kAudioOutputUnitProperty_ChannelMap"
+            << ", ErrorCode=" << result << std::endl;
 			return false;
 		}
         
@@ -1353,10 +1321,10 @@ bool CoreAudioOutput::setAUOutputChannelLayout(AudioChannelLayout *channelLayout
     return true;
 }
 
-AudioBufferList * CoreAudioOutput::allocateABL(UInt32 channelsPerFrame,
-                                                 UInt32 bytesPerSample,
-                                                 bool interleaved,
-                                                 UInt32 capacityFrames)
+AudioBufferList * CoreAudioOutputPrivate::allocateABL(UInt32 channelsPerFrame,
+                                                      UInt32 bytesPerSample,
+                                                      bool interleaved,
+                                                      UInt32 capacityFrames)
 {
     UInt32 bytesPerFrame = bytesPerSample * channelsPerFrame;
     
@@ -1379,24 +1347,167 @@ AudioBufferList * CoreAudioOutput::allocateABL(UInt32 channelsPerFrame,
 }
 
 
+
+
+
+
+
+
+
+CoreAudioOutput::CoreAudioOutput() : Stage(), d_ptr(new CoreAudioOutputPrivate) {
+    // Add output sink to stage.
+    addSink("input");
+}
+
+CoreAudioOutput::~CoreAudioOutput() {
+    delete d_ptr;
+}
+
+
+SharingMode CoreAudioOutput::sharingMode() const {
+    A_D(const CoreAudioOutput);
+    
+	AudioObjectPropertyAddress propertyAddress;
+    
+    propertyAddress.mSelector	= kAudioDevicePropertyHogMode;
+    propertyAddress.mScope		= kAudioObjectPropertyScopeGlobal;
+    propertyAddress.mElement    = kAudioObjectPropertyElementMaster;
+    
+	pid_t hogPID = static_cast<pid_t>(-1);
+	UInt32 dataSize = sizeof(hogPID);
+    
+	AudioDeviceID deviceID;
+	if(!d->outputDeviceID(deviceID)) {
+		return kShared;
+    }
+    
+	OSStatus result = AudioObjectGetPropertyData(deviceID,
+                                                 &propertyAddress,
+                                                 0,
+                                                 nullptr,
+                                                 &dataSize,
+                                                 &hogPID);
+    
+	if(kAudioHardwareNoError != result) {
+		return kShared;
+	}
+    
+	return (hogPID == getpid() ? kExclusive : kShared);
+}
+
+bool CoreAudioOutput::setSharingMode(SharingMode mode)
+{
+    A_D(CoreAudioOutput);
+    
+    AudioDeviceID deviceID;
+	if(!d->outputDeviceID(deviceID)) {
+		return false;
+    }
+    
+	AudioObjectPropertyAddress propertyAddress;
+    propertyAddress.mSelector   = kAudioDevicePropertyHogMode;
+    propertyAddress.mScope      = kAudioObjectPropertyScopeGlobal;
+    propertyAddress.mElement    = kAudioObjectPropertyElementMaster;
+    
+	pid_t pid = static_cast<pid_t>(-1);
+	UInt32 dataSize = sizeof(pid);
+    
+	OSStatus result = AudioObjectGetPropertyData(deviceID,
+                                                 &propertyAddress,
+                                                 0,
+                                                 nullptr,
+                                                 &dataSize,
+                                                 &pid);
+
+	if(kAudioHardwareNoError != result) {
+        ERROR_THIS("CoreAudioOutput::setSharingMode")
+        << "ErrorCode=" << result << std::endl;
+		return false;
+	}
+    
+    // Get the application's PID.
+    pid_t appPID = getpid();
+    
+    if( mode == kShared ) {
+        
+        // Device is not being used exclusively.
+        if( pid == static_cast<pid_t>(-1) ) {
+            return true;
+        }
+        // Check if the device is exclusive to another application. Can't do
+        // anything.
+        else if( pid != appPID ) {
+            WARNING_THIS("CoreAudioOutput::setSharingMode") <<
+            "Another PID is hogging the audio device." << std::endl;
+            return false;
+        }
+
+        // Set pid to be shared.
+        pid = static_cast<pid_t>(-1);
+    }
+    else {
+        
+        // Device is being used exclusively.
+        if( pid == appPID ) {
+            return true;
+        }
+        // Check if the device is exclusive to another application. Can't do
+        // anything.
+        else if( pid != appPID ) {
+            WARNING_THIS("CoreAudioOutput::setSharingMode") <<
+            "Another PID is hogging the audio device." << std::endl;
+            return false;
+        }
+        
+        // Set pid to us.
+        pid = appPID;
+    }
+    
+	bool restartIO = d->isOutputRunning();
+	if(restartIO) {
+		d->stopOutput();
+    }
+    
+	result = AudioObjectSetPropertyData(deviceID,
+                                        &propertyAddress,
+                                        0,
+                                        nullptr,
+                                        sizeof(pid),
+                                        &pid);
+    
+	if(kAudioHardwareNoError != result) {
+        ERROR_THIS("CoreAudioOutput::setSharingMode")
+        << "ErrorCode=" << result << std::endl;
+		return false;
+	}
+    
+	if(restartIO && !d->isOutputRunning()) {
+		d->startOutput();
+    }
+    
+	return true;
+}
+
+
 Stage::Sink *CoreAudioOutput::input()
 {
     return mSinks["input"].get();
 }
 
 bool CoreAudioOutput::beginPlayback() {
+    A_D(CoreAudioOutput);
     
     // Open output.
-    if( !openOutput() ) {
-        ERROR_THIS("CoreAudioEndpoint::beginPlayback") << "Could not open output."
+    if( !d->openOutput() ) {
+        ERROR_THIS("CoreAudioOutput::beginPlayback") << "Could not open output."
         << std::endl;
         return false;
     }
     
     // Set default output device.
     CFStringRef device = nullptr;
-    if( !setOutputDeviceUID(device) ) {
-        ERROR_THIS("CoreAudioEndpoint::beginPlayback") << "Failed to set default "
+    if( !d->setOutputDeviceUID(device) ) {
+        ERROR_THIS("CoreAudioOutput::beginPlayback") << "Failed to set default "
         "output device." << std::endl;
         return false;
     }
@@ -1404,22 +1515,23 @@ bool CoreAudioOutput::beginPlayback() {
     // Don't actually start the device till a buffer is received.
     
     // Kick off the clock.
-    mClockPeriod = 0.100;
-    mCurrentClockTick = 0.0;
-    mClockProvider.publish(mClockPeriod);
+    d->mClockPeriod = 0.100;
+    d->mCurrentClockTick = 0.0;
+    d->mClockProvider.publish(d->mClockPeriod);
 
     return true;
 }
 
 bool CoreAudioOutput::stoppedPlayback() {
+    A_D(CoreAudioOutput);
     
-    stopOutput();
-    closeOutput();
+    d->stopOutput();
+    d->closeOutput();
     
     // Clear all processed buffers.
-    mBuffers.clear();
-    mAudioBufferListWrapper.reset();
-    mCurrentBuffer.reset();
+    d->mBuffers.clear();
+    d->mAudioBufferListWrapper.reset();
+    d->mCurrentBuffer.reset();
     
     // Reset the sink.
     input()->reset();
@@ -1432,11 +1544,12 @@ bool CoreAudioOutput::stoppedPlayback() {
 
 
 void CoreAudioOutput::process( ProcessIOFlags *ioFlags ){
+    A_D(CoreAudioOutput);
     
     ManagedBuffer buffer;
 
     if( !input()->isLinked() ) {
-        WARNING_THIS("CoreAudioEndpoint::process") << "No source linked to input."
+        WARNING_THIS("CoreAudioOutput::process") << "No source linked to input."
         << std::endl;
         return;
     }
@@ -1447,16 +1560,16 @@ void CoreAudioOutput::process( ProcessIOFlags *ioFlags ){
     if( result == Sink::kSuccess ) {
         
         // Pass ownership of buffer to the queue.
-        mBuffers.push(buffer);
+        d->mBuffers.push(buffer);
         
-        // Hint that the CoreAudioEndpoint could process more buffers since its
+        // Hint that the CoreAudioOutput could process more buffers since its
         // internal ring buffer is not full.
-        if(!mBuffers.full()) {
+        if(!d->mBuffers.full()) {
             (*ioFlags) |= kProcessMoreHint;
         }
     }
     else {
-        ERROR_THIS("CoreAudioEndpoint::process") << "Pull error, PullResult="
+        ERROR_THIS("CoreAudioOutput::process") << "Pull error, PullResult="
         << result << "." << std::endl;
     }
     
@@ -1467,19 +1580,22 @@ bool CoreAudioOutput::reconfigureIO() {
 }
 
 bool CoreAudioOutput::reconfigureInputFormat(const Sink &sink,
-                                               const BufferFormat &format){
-    
+                                             const BufferFormat &format)
+{
 #pragma unused(sink)
     
-    TRACE_THIS("CoreAudioEndpoint::reconfigureSink")
+    A_D(CoreAudioOutput);
+
+    
+    TRACE_THIS("CoreAudioOutput::reconfigureSink")
     << "Attempting reconfiguration." << std::endl;
     
     /* Stop and unitialiaze the AUGraph. */
 	Boolean graphIsRunning = FALSE;
-	OSStatus result = AUGraphIsRunning(mAUGraph, &graphIsRunning);
+	OSStatus result = AUGraphIsRunning(d->mAUGraph, &graphIsRunning);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::reconfigureSink")
+        ERROR_THIS("CoreAudioOutput::reconfigureSink")
         << "Couldn't get graph running state." << std::endl;
         
 		return false;
@@ -1487,20 +1603,20 @@ bool CoreAudioOutput::reconfigureInputFormat(const Sink &sink,
 	
 	if(graphIsRunning) {
         
-		result = AUGraphStop(mAUGraph);
+		result = AUGraphStop(d->mAUGraph);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::reconfigureSink")
+            ERROR_THIS("CoreAudioOutput::reconfigureSink")
             << "Couldn't stop the graph." << std::endl;
 			return false;
 		}
 	}
 
 	Boolean graphIsInitialized = FALSE;
-	result = AUGraphIsInitialized(mAUGraph, &graphIsInitialized);
+	result = AUGraphIsInitialized(d->mAUGraph, &graphIsInitialized);
     
 	if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::reconfigureSink")
+        ERROR_THIS("CoreAudioOutput::reconfigureSink")
         << "Couldn't get graph initialization state." << std::endl;
         
 		return false;
@@ -1508,20 +1624,20 @@ bool CoreAudioOutput::reconfigureInputFormat(const Sink &sink,
 	
 	if(graphIsInitialized) {
         
-		result = AUGraphUninitialize(mAUGraph);
+		result = AUGraphUninitialize(d->mAUGraph);
         
 		if(result != noErr) {
-            ERROR_THIS("CoreAudioEndpoint::reconfigureSink")
+            ERROR_THIS("CoreAudioOutput::reconfigureSink")
             << "Couldn't uninitialize the graph." << std::endl;
 			return false;
 		}
 	}
     
     /* Reconfigure the graph. */
-    if(!setAUGraphSampleRateAndChannelLayout(format.sampleRate(),
-                                             format.channelCount())) {
+    if(!d->setAUGraphSampleRateAndChannelLayout(format.sampleRate(),
+                                                format.channelCount())) {
         
-        ERROR_THIS("CoreAudioEndpoint::reconfigureSink")
+        ERROR_THIS("CoreAudioOutput::reconfigureSink")
         << "Setting the sample rate and number of channels failed." << std::endl;
         
         return false;
@@ -1542,6 +1658,7 @@ bool CoreAudioOutput::reconfigureInputFormat(const Sink &sink,
 
     // Use the channel bitmap because CoreAudio and Ayane channel bitmaps map
     // the same way.
+    channelLayout->mNumberChannelDescriptions = 0;
     channelLayout->mChannelLayoutTag = kAudioChannelLayoutTag_UseChannelBitmap;
     channelLayout->mChannelBitmap = format.channels();
     
@@ -1549,61 +1666,62 @@ bool CoreAudioOutput::reconfigureInputFormat(const Sink &sink,
     SInt32 *channelMap = nullptr;
     
     // Set the channel layout and get the input channel to output channel map.
-    if( !setAUOutputChannelLayout(channelLayout.get(),
-                                  &channelMap,
-                                  &channelCount) )
+    if(!d->setAUOutputChannelLayout(channelLayout.get(),
+                                    &channelMap,
+                                    &channelCount) )
     {
-        ERROR_THIS("CoreAudioEndpoint::reconfigureSink")
-        << "Setting the channel layout failed." << std::endl;
+        ERROR_THIS("CoreAudioOutput::reconfigureSink")
+        << "Setting the channel layout failed. Do you have more input channels"
+        " than output channels?" << std::endl;
         return false;
     }
     
     /* Update the raw buffer using the channel IO map. */
-    mAudioBufferListWrapper.reset(new RawBuffer(mMaxFramesPerSlice,
-                                                channelCount,
-                                                kFloat32,
-                                                true));
+    d->mAudioBufferListWrapper.reset(new RawBuffer(d->mMaxFramesPerSlice,
+                                                   channelCount,
+                                                   kFloat32,
+                                                   true));
     
-    TRACE_THIS("CoreAudioEndpoint::reconfigureInputFormat")
+    TRACE_THIS("CoreAudioOutput::reconfigureInputFormat")
     << "Using channel map:" << std::endl;
     
     for(UInt32 i = 0; i < channelCount; ++i) {
-        TRACE_THIS("CoreAudioEndpoint::reconfigureInputFormat")
+        TRACE_THIS("CoreAudioOutput::reconfigureInputFormat")
         << "  " << i << " -> " << channelMap[i] << std::endl;
         
         // Again, CoreAudio's channel mapping is the same as Ayane's so we can
         // directly determine the channel map.  In this case, i is the CoreAudio ABL
         // list index.
-        mAudioBufferListWrapper->mBuffers[i].mChannel = static_cast<Channel>(1<<channelMap[i]);
+        d->mAudioBufferListWrapper->mBuffers[i].mChannel = static_cast<Channel>(1<<channelMap[i]);
     }
 
     delete channelMap;
     
     /* Update the clock. */
-    mPeriodPerFrame = (1.0 / format.sampleRate());
+    d->mPeriodPerFrame = (1.0 / format.sampleRate());
     
     /* Clear the buffer queue. */
-    mCurrentBuffer.reset();
-    mBuffers.clear();
+    d->mCurrentBuffer.reset();
+    d->mBuffers.clear();
 
     /* Restart the graph. */
-    result = AUGraphInitialize(mAUGraph);
+    result = AUGraphInitialize(d->mAUGraph);
     
     if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::reconfigureSink")
+        ERROR_THIS("CoreAudioOutput::reconfigureSink")
         << "Couldn't intialize the graph." << std::endl;
         return false;
     }
     
-    result = AUGraphStart(mAUGraph);
+    result = AUGraphStart(d->mAUGraph);
 
     if(result != noErr) {
-        ERROR_THIS("CoreAudioEndpoint::reconfigureSink")
+        ERROR_THIS("CoreAudioOutput::reconfigureSink")
         << "Couldn't start the graph." << std::endl;
         return false;
     }
 
-    INFO_THIS("CoreAudioEndpoint::reconfigureSink")
+    INFO_THIS("CoreAudioOutput::reconfigureSink")
     << "Reconfiguration successful. "
     << format.sampleRate() << "Hz, Channels="
     << format.channelCount() << ", ChannelLayout="
@@ -1617,11 +1735,12 @@ bool CoreAudioOutput::reconfigureInputFormat(const Sink &sink,
 
 
 ClockProvider &CoreAudioOutput::clockProvider() {
-    return mClockProvider;
+    A_D(CoreAudioOutput);
+    return d->mClockProvider;
 }
 
 
-OSStatus CoreAudioOutput::renderNotify(AudioUnitRenderActionFlags *ioActionFlags,
+OSStatus CoreAudioOutputPrivate::renderNotify(AudioUnitRenderActionFlags *ioActionFlags,
                                          const AudioTimeStamp *inTimeStamp,
                                          UInt32 inBusNumber,
                                          UInt32 inNumberFrames,
@@ -1641,7 +1760,7 @@ OSStatus CoreAudioOutput::renderNotify(AudioUnitRenderActionFlags *ioActionFlags
             
             if( mCurrentBuffer ){
                 // Send a progress message.
-                pipeline()->messageBus().publish(new ProgressMessage(mCurrentBuffer->timestamp()));
+                //pipeline()->messageBus().publish(new ProgressMessage(mCurrentBuffer->timestamp()));
             }
         }
 
@@ -1654,7 +1773,7 @@ OSStatus CoreAudioOutput::renderNotify(AudioUnitRenderActionFlags *ioActionFlags
 
 
 
-OSStatus CoreAudioOutput::render(AudioUnitRenderActionFlags *ioActionFlags,
+OSStatus CoreAudioOutputPrivate::render(AudioUnitRenderActionFlags *ioActionFlags,
                                    const AudioTimeStamp	 *inTimeStamp,
                                    UInt32 inBusNumber,
                                    UInt32 inNumberFrames,
@@ -1688,7 +1807,7 @@ OSStatus CoreAudioOutput::render(AudioUnitRenderActionFlags *ioActionFlags,
         }
         else {
             
-            DEBUG_ONLY(WARNING_THIS("CoreAudioEndpoint::render") << "Underrun."
+            DEBUG_ONLY(WARNING_THIS("CoreAudioOutputPrivate::render") << "Underrun."
                        << std::endl);
             
             // If absolutely nothing was written, signal we're outputting silence.

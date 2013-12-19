@@ -53,12 +53,12 @@ if( ${CMAKE_SYSTEM_NAME} MATCHES "Darwin" )
 		${AUDIO_UNIT_FRAMEWORK}
 		)
 
-	set( ayane_host_SRCS
-		src/outputs/CoreAudioOutput.cxx
+	set(ayane_host_SRCS
+		src/Outputs/CoreAudioOutput.cxx
 		)
 	
-	set( ayane_host_HDRS
-		src/outputs/CoreAudioOutput.h
+	set(ayane_host_HDRS
+		include/Ayane/Outputs/CoreAudioOutput.h
 		)
 		
 elseif( ${CMAKE_SYSTEM_NAME} MATCHES "Linux" )
@@ -125,7 +125,7 @@ add_prefix(ayane_HDRS "include/Ayane/")
 
 ### Targets ###
 
-add_library(ayane SHARED
+add_library(Ayane SHARED
 			# Platform independent sources
 			${ayane_SRCS} 
 			${ayane_HDRS} 
@@ -138,9 +138,9 @@ add_library(ayane SHARED
 			${ayane_host_LIBS}
 			)
 
-target_link_libraries(ayane ${ayane_host_LIBS})
+target_link_libraries(Ayane ${ayane_host_LIBS})
 
-install(TARGETS ayane
+install(TARGETS Ayane
 		LIBRARY DESTINATION lib
 		ARCHIVE DESTINATION lib
 		)
