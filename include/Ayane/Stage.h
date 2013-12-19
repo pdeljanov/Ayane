@@ -25,6 +25,8 @@
 
 namespace Ayane {
     
+    class StagePrivate;
+    
     /**
      *  A Stage is the basic building block in an audio pipeline. A Stage
      *  may produce, consume, or transform audio data that flows through it.
@@ -95,6 +97,12 @@ namespace Ayane {
         Stage();
         virtual ~Stage();
         
+        
+        
+        /* Port API */
+        
+        
+        
         /**
          *  Attempts to retreive a source port by name.
          */
@@ -134,6 +142,30 @@ namespace Ayane {
         }
         
         /**
+         *  Unlinks the current source, from the sink, and replaces it with
+         *  the next source.
+         */
+        static bool replace(Source *current, Source *next, Sink *sink);
+        
+        /**
+         *  Links the specified source and sink together.
+         */
+        static bool link( Source *source, Sink *sink );
+        
+        /**
+         *  Unlinks the specified source from the sink.
+         */
+        static void unlink( Source *source, Sink *sink );
+        
+        
+        /* Stage (Public) API */
+        
+        /**
+         *  Gets the stage's state. Thread-safe.
+         */
+        State state() const;
+        
+        /**
          *  Activates the stage to prepare it for playback. Thread-safe.
          */
         bool activate(Pipeline *pipeline = nullptr);
@@ -154,30 +186,9 @@ namespace Ayane {
          */
         void stop();
         
-        /**
-         *  Gets the stage's state. Thread-safe.
-         */
-        State state() const {
-            return mState;
-        }
-        
-        /**
-         *  Unlinks the current source, from the sink, and replaces it with
-         *  the next source.
-         */
-        static bool replace(Source *current, Source *next, Sink *sink);
-        
-        /**
-         *  Links the specified source and sink together.
-         */
-        static bool link( Source *source, Sink *sink );
-        
-        /**
-         *  Unlinks the specified source from the sink.
-         */
-        static void unlink( Source *source, Sink *sink );
-        
+
     protected:
+                
         
         /**
          *  Enumeration of possible input/output flags for process.
@@ -197,10 +208,44 @@ namespace Ayane {
         } ProcessIOFlag;
         
         /**
+         *  Enumeration of possible results from pull operations.
+         */
+        typedef enum
+        {
+            /** A buffer was pulled successfully. */
+            kSuccess = 0,
+            
+            /** The pull was cancelled. */
+            kCancelled,
+            
+            /**
+             *  The buffer received is in an unsupported format or the
+             *  sink reconfiguration callback failed.
+             */
+            kUnsupportedFormat,
+            
+            /** The source has no queued buffers. */
+            kBufferQueueEmpty,
+            
+            /**
+             *  The requested operation is only valid on an asynchronous
+             *  source.
+             */
+            kNotAsynchronous
+            
+        } PullResult;
+        
+        /**
          *  Process input/output flags set. Bits in this type can be tested
          *  against the flags in ProcessIOFlag.
          */
         typedef uint32_t ProcessIOFlags;
+
+        
+        
+        /* Port API */
+
+        
         
         /**
          *  Adds a sources with the given name to the source list.
@@ -223,19 +268,57 @@ namespace Ayane {
         void removeSink( const std::string &name );
         
         /**
+         *  Requests a buffer from the linked source. This function will
+         *  wait until the source services the request. The returned buffer
+         *  may be a different format between successive calls, but the sink
+         *  will issue a port-specific reconfigureSink() event.
+         */
+        PullResult pull(Sink *sink, ManagedBuffer *outBuffer);
+        
+        /**
+         *  Attempts to pull a buffer from the linked source. This
+         *  function will never block, but it may not always return a
+         *  buffer.
+         */
+        PullResult tryPull(Sink *sink, ManagedBuffer *outBuffer);
+        
+        /**
+         *  Cancels any waiting pulls.
+         */
+        void cancelPull(Sink *sink);
+        
+        /**
+         *  Attempts to push buffer to the source. If the source buffer
+         *  queue is full, this function will drop the buffer.
+         */
+        void push(Source *source, ManagedBuffer &buffer );
+        
+        /**
+         *  Resets a source port.
+         */
+        void resetPort(Source *source);
+        
+        /**
+         *  Resets a sink port.
+         */
+        void resetPort(Sink *sink);
+        
+        
+        
+        /* Stage (Private) API */
+        
+        
+        
+        /**
          *  Gets the stage clock.
          */
-        const Clock *clock() const {
-            return mClock;
-        }
+        const Clock *clock() const;
         
         /**
          *  Gets the parent message bus on which the Stage can post a
          *  message.
          */
-        Pipeline *pipeline() const {
-            return mParentPipeline;
-        }
+        Pipeline *pipeline() const;
         
         /**
          *  Called by the Stage when the next set of buffers should be
@@ -289,7 +372,7 @@ namespace Ayane {
          *  is required.
          */
         virtual bool stoppedPlayback() = 0;
-        
+
         /**
          *  Map of sources. Keyed by name.
          */
@@ -301,65 +384,12 @@ namespace Ayane {
         SinkCollection mSinks;
         
     private:
+        class SourceSinkPrivate;
+
         AYANE_DISALLOW_COPY_AND_ASSIGN(Stage);
         
-        
-        class ReconfigureData;
-        class SourceSinkPrivate;
-        
-        /** Synchronous processing loop. */
-        void syncProcessLoop(Clock*);
-        
-        /** Begins asynchronous processing. */
-        void startAsyncProcess();
-        
-        /** Stops asynchronous processing. */
-        void stopAsyncProcess();
-        
-        /** Asynchronous processing loop. */
-        void asyncProcessLoop();
-        
-        
-        /** Deactivate function without locking. */
-        void deactivateNoLock();
-        
-        /** Stop function without locking. */
-        void stopNoLock();
-        
-        
-        /**
-         *  Determines if the stage should opeate asynchronously given the
-         *  current configuration.
-         */
-        bool shouldRunAsynchronous() const;
-        
-        /** Reports that a source's buffer queue is not full. */
-        void reportBufferQueueIsNotFull() {
-            ++mBufferQueuesReportedNotFull;
-        }
-        
-        
-        void beginReconfiguration( ReconfigureData& );
-        
-        void endReconfiguration( ReconfigureData& );
-        
-        
-        // State tracking.
-        std::mutex mStateMutex;
-        State mState;
-        
-        // Thread for asynchronous processing.
-        std::thread mProcessingThread;
-        bool mAsynchronousProcessing;
-        
-        // Clock pointer (If the Stage is running asynchronously, mClock is
-        // owned by the Stage and must be freed when stopped. Otherwise,
-        // mClock is points to a Clock owned by another Stage and should be
-        // reset to null when stopped.
-        Clock *mClock;
-        uint32_t mBufferQueuesReportedNotFull;
-        
-        Pipeline *mParentPipeline;
+        StagePrivate *d_ptr;
+        AYANE_DECLARE_PRIVATE(Stage);
     };
     
     /**
@@ -371,6 +401,7 @@ namespace Ayane {
     class Stage::Source {
         
         friend class Stage;
+        friend class StagePrivate;
         
     public:
         
@@ -386,17 +417,6 @@ namespace Ayane {
         bool isLinked() const;
         
         /**
-         *  Attempts to push buffer to the source. If the source buffer
-         *  queue is full, this function will drop the buffer.
-         */
-        void push( ManagedBuffer &buffer );
-        
-        /**
-         *  Resets the source by clearing all pending buffers.
-         */
-        void reset();
-        
-        /**
          *  Checks if the linked sink supports the specified buffer format.
          */
         bool checkFormatSupport( const BufferFormat &format ) const;
@@ -410,9 +430,9 @@ namespace Ayane {
     private:
         AYANE_DISALLOW_COPY_AND_ASSIGN(Source);
         
-        Source( Stage *stage );
+        Source(StagePrivate *stage);
         
-        Stage *mStage;
+        StagePrivate *mStage;
         Sink  *mLinkedSink;
         
         std::unique_ptr<SourceSinkPrivate> mShared;
@@ -427,6 +447,7 @@ namespace Ayane {
     class Stage::Sink {
         
         friend class Stage;
+        friend class StagePrivate;
         
     public:
         
@@ -457,35 +478,6 @@ namespace Ayane {
         SchedulingMode;
         
         /**
-         *  Enumeration of possible results from pull operations.
-         */
-        typedef enum
-        {
-            /** A buffer was pulled successfully. */
-            kSuccess = 0,
-            
-            /** The pull was cancelled. */
-            kCancelled,
-            
-            /**
-             *  The buffer received is in an unsupported format or the
-             *  sink reconfiguration callback failed.
-             */
-            kUnsupportedFormat,
-            
-            /** The source has no queued buffers. */
-            kBufferQueueEmpty,
-            
-            /**
-             *  The requested operation is only valid on an asynchronous
-             *  source.
-             */
-            kNotAsynchronous
-            
-        } PullResult;
-        
-        
-        /**
          *  Sink destructor.
          */
         ~Sink();
@@ -496,34 +488,9 @@ namespace Ayane {
         bool isLinked() const;
         
         /**
-         *  Resets the sink by clearing any saved buffer format.
-         */
-        void reset();
-        
-        /**
          *  Tests if the buffer format is compatible with the sink.
          */
-        bool checkFormatSupport( const BufferFormat &format ) const;
-        
-        /**
-         *  Requests a buffer from the linked source. This function will
-         *  wait until the source services the request. The returned buffer
-         *  may be a different format between successive calls, but the sink
-         *  will issue a port-specific reconfigureSink() event.
-         */
-        PullResult pull( ManagedBuffer *outBuffer );
-        
-        /**
-         *  Attempts to pull a buffer from the linked source. This
-         *  function will never block, but it may not always return a
-         *  buffer.
-         */
-        PullResult tryPull( ManagedBuffer *outBuffer );
-        
-        /**
-         *  Cancels any waiting pulls.
-         */
-        void cancelPull();
+        bool checkFormatSupport(const BufferFormat &format) const;
         
         /**
          *  Gets the scheduling mode.
@@ -557,9 +524,9 @@ namespace Ayane {
     private:
         AYANE_DISALLOW_COPY_AND_ASSIGN(Sink);
         
-        Sink( Stage *stage );
+        Sink(StagePrivate *stage);
         
-        Stage  *mStage;
+        StagePrivate  *mStage;
         Source *mLinkedSource;
         
         SchedulingMode m_scheduling;

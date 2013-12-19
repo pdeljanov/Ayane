@@ -1533,8 +1533,7 @@ bool CoreAudioOutput::stoppedPlayback() {
     d->mAudioBufferListWrapper.reset();
     d->mCurrentBuffer.reset();
     
-    // Reset the sink.
-    input()->reset();
+    resetPort(input());
 
     return true;
 }
@@ -1554,10 +1553,10 @@ void CoreAudioOutput::process( ProcessIOFlags *ioFlags ){
         return;
     }
 
-    Sink::PullResult result = input()->pull(&buffer);
+    PullResult result = pull(input(), &buffer);
     
     // May kick off a sink reconfiguration.
-    if( result == Sink::kSuccess ) {
+    if( result == kSuccess ) {
         
         // Pass ownership of buffer to the queue.
         d->mBuffers.push(buffer);

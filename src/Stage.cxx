@@ -10,7 +10,79 @@
 #include "Ayane/Trace.h"
 
 namespace Ayane {
+    
+    /**
+     *  ReconfigureData stores state information used between the
+     *  begin/endReconfiguration function pair.
+     */
+    class StageReconfigurationData {
+    public:
+        Stage::State mState;
+    };
+    
+    
+    class StagePrivate {
+    public:
         
+        StagePrivate(Stage *q);
+        ~StagePrivate();
+        
+        /** Synchronous processing loop. */
+        void syncProcessLoop(Clock*);
+        
+        /** Begins asynchronous processing. */
+        void startAsyncProcess();
+        
+        /** Stops asynchronous processing. */
+        void stopAsyncProcess();
+        
+        /** Asynchronous processing loop. */
+        void asyncProcessLoop();
+        
+        
+        /** Deactivate function without locking. */
+        void deactivateNoLock();
+        
+        /** Stop function without locking. */
+        void stopNoLock();
+        
+        
+        /**
+         *  Determines if the stage should opeate asynchronously given the
+         *  current configuration.
+         */
+        bool shouldRunAsynchronous() const;
+        
+        
+        void beginReconfiguration(StageReconfigurationData&);
+        
+        void endReconfiguration(StageReconfigurationData&);
+        
+        
+        Stage *q_ptr;
+        AYANE_DECLARE_PUBLIC(Stage);
+        
+        
+        // State tracking.
+        std::mutex mStateMutex;
+        Stage::State mState;
+        
+        // Thread for asynchronous processing.
+        std::thread mProcessingThread;
+        bool mAsynchronousProcessing;
+        
+        // Clock pointer (If the Stage is running asynchronously, mClock is
+        // owned by the Stage and must be freed when stopped. Otherwise,
+        // mClock is points to a Clock owned by another Stage and should be
+        // reset to null when stopped.
+        Clock *mClock;
+        uint32_t mBufferQueuesReportedNotFull;
+        
+        Pipeline *mParentPipeline;
+        
+        
+    };
+    
     /**
      *  SourceSinkPrivate stores the shared state between a linked Source 
      *  and Sink.
@@ -31,39 +103,32 @@ namespace Ayane {
         
     };
     
-    /**
-     *  ReconfigureData stores state information used between the
-     *  begin/endReconfiguration function pair.
-     */
-    class Stage::ReconfigureData {
-    public:
-        State mState;
-    };
+
     
 }
 
 
 using namespace Ayane;
 
-/* Stage */
 
-Stage::Stage() :
-    mState(kDeactivated),
-    mAsynchronousProcessing(false),
-    mClock(nullptr),
-    mBufferQueuesReportedNotFull(0)
+/* StagePrivate */
+StagePrivate::StagePrivate(Stage *q) :  q_ptr(q),
+                                        mState(Stage::kDeactivated),
+                                        mAsynchronousProcessing(false),
+                                        mClock(nullptr),
+                                        mBufferQueuesReportedNotFull(0)
 {
     
 }
 
-Stage::~Stage() {
+StagePrivate::~StagePrivate() {
     
     // Transition the state to deactivated.
     {
         std::lock_guard<std::mutex> lock(mStateMutex);
         
         // Stage was playing, transition it to an activated state.
-        if( mState == kPlaying ) {
+        if( mState == Stage::kPlaying ) {
             
             WARNING_THIS("Stage::~Stage") << "It is **highly unrecommended** to"
             " call the destructor of a playing stage. Call stop() first."
@@ -81,7 +146,7 @@ Stage::~Stage() {
             mClock = nullptr;
             
             // Record the state.
-            mState = kActivated;
+            mState = Stage::kActivated;
             
             INFO_THIS("Stage::~Stage") << "Force stopped." << std::endl;
         }
@@ -92,102 +157,17 @@ Stage::~Stage() {
     
     // Must release the state lock because the sources and sinks are cleared.
     
+    A_Q(Stage);
+    
     // Clear the sources and sinks before Stage calls the destructors on its
     // member. This allows the sources and sinks to unlink themselves.
-    mSources.clear();
-    mSinks.clear();
+    q->mSources.clear();
+    q->mSinks.clear();
 }
 
-void Stage::syncProcessLoop(Clock *clock) {
+bool StagePrivate::shouldRunAsynchronous() const {
     
-    std::lock_guard<std::mutex> lock(mStateMutex);
-    
-    if( mState == kPlaying ) {
-        
-        // Reset the processing IO flags
-        ProcessIOFlags ioFlags = 0;
-        
-        // Update the clock pointer so that synchronous process calls can
-        // cascade their clocks.
-        mClock = clock;
-        
-        // Do a process run.
-        process(&ioFlags);
-    }
-    else {
-        NOTICE_THIS("Stage::syncProcessLoop") << "Attempted to call process() "
-        "on a Stage that is not playing." << std::endl;
-    }
-}
-
-void Stage::asyncProcessLoop() {
-    
-    bool doBufferRun = false;
-    ProcessIOFlags ioFlags = 0;
-    uint32_t activeSources = mSources.size();
-
-    
-    while(doBufferRun || mClock->wait()) {
-        
-        ioFlags = 0;
-        mBufferQueuesReportedNotFull = 0;
-        
-        {
-            // Acquire the state lock, and then do a process run.
-            std::lock_guard<std::mutex> lock(mStateMutex);
-            
-            // Cancellation flag?
-            process(&ioFlags);
-        }
-        
-        /*
-         * Two cases where extra buffering may occur:
-         * 1. All sources have reported they can take atleast 1 more buffer.
-         * 2. There are no active sources, but the stage is using internal
-         *    buffering and it is hinting that it can buffer more.
-         */
-        doBufferRun = ((mBufferQueuesReportedNotFull > 0) && (mBufferQueuesReportedNotFull == activeSources)) ||
-                      ((ioFlags & kProcessMoreHint) && (activeSources == 0));
-
-    }
-
-    INFO_THIS("Stage::asyncProcessLoop") << "Asynchronous processing thread "
-    << std::this_thread::get_id() << " exiting." << std::endl;
-}
-
-void Stage::startAsyncProcess(){
-    
-    if( !mProcessingThread.joinable() ){
-
-        // Start the clock.
-        mClock->start();
-        mProcessingThread = std::thread( &Stage::asyncProcessLoop, this );
-        
-        INFO_THIS("Stage::startAsyncProcess") << "Started asynchronous "
-        "processing thread " << mProcessingThread.get_id() << "." << std::endl;
-    }
-    else
-    {
-        NOTICE_THIS("Stage::startAsyncProcess") << "Asynchronous processing "
-        "thread already started." << std::endl;
-    }
-
-}
-
-void Stage::stopAsyncProcess() {
-    
-    if( mProcessingThread.joinable() ){
-        
-        TRACE_THIS("Stage::stopAsyncProcess") << "Waiting for asynchronous "
-        "processing thread to stop." << std::endl;
-
-        // Stop the clock. Processing thread will exit.
-        mClock->stop();
-        mProcessingThread.join();
-    }
-}
-
-bool Stage::shouldRunAsynchronous() const {
+    A_Q(const Stage);
     
     /* Synchonicity mode
      *
@@ -207,23 +187,23 @@ bool Stage::shouldRunAsynchronous() const {
      */
     
     // Pure sink node.
-    if( sourceCount() == 0 ) {
+    if( q->sourceCount() == 0 ) {
         return true;
     }
     // If the stage has multiple sources, use async mode. Otherwise, use
     // downstream parameters to determine is async mode is needed.
-    else if( sourceCount() > 1 ) {
+    else if( q->sourceCount() > 1 ) {
         return true;
     }
     // Only one source, check downstream parameters.
     else
     {
-        const Source *source = mSources.begin()->second.get();
+        const Stage::Source *source = q->mSources.begin()->second.get();
         
         if( source->isLinked() ) {
-
+            
             // Check if connected sink is forcing an asynchronous link.
-            if(source->mLinkedSink->scheduling() == Sink::kForceAsynchronous) {
+            if(source->mLinkedSink->scheduling() == Stage::Sink::kForceAsynchronous) {
                 
                 INFO_THIS("Stage::shouldRunAsynchronous") << "Sink: "
                 << source->mLinkedSink << " (on Source: " << source
@@ -234,7 +214,7 @@ bool Stage::shouldRunAsynchronous() const {
             
             // If the downstream Stage contains more than one sink, make the
             // link asynchronous.
-            if(source->mLinkedSink->mStage->sinkCount() > 1) {
+            if(source->mLinkedSink->mStage->q_ptr->sinkCount() > 1) {
                 return true;
             }
             
@@ -244,116 +224,133 @@ bool Stage::shouldRunAsynchronous() const {
     return false;
 }
 
-
-bool Stage::activate(Pipeline *pipeline) {
+void StagePrivate::syncProcessLoop(Clock *clock) {
     
     std::lock_guard<std::mutex> lock(mStateMutex);
     
-    // Deactivated -> Activated.
-    if( mState == kDeactivated ) {
+    if( mState == Stage::kPlaying ) {
         
-        // Set the pipeline.
-        mParentPipeline = pipeline;
+        // Reset the processing IO flags
+        Stage::ProcessIOFlags ioFlags = 0;
         
-        // Switch state to activated.
-        mState = kActivated;
+        // Update the clock pointer so that synchronous process calls can
+        // cascade their clocks.
+        mClock = clock;
         
-        INFO_THIS("Stage::activate") << "Activated." << std::endl;
+        A_Q(Stage);
         
-        return true;
+        // Do a process run.
+        q->process(&ioFlags);
     }
-    
-    return false;
+    else {
+        NOTICE_THIS("Stage::syncProcessLoop") << "Attempted to call process() "
+        "on a Stage that is not playing." << std::endl;
+    }
 }
 
-void Stage::deactivateNoLock() {
+void StagePrivate::asyncProcessLoop() {
+    
+    A_Q(Stage);
+
+    bool doBufferRun = false;
+    Stage::ProcessIOFlags ioFlags = 0;
+    uint32_t activeSources = q->mSources.size();
+    
+    while(doBufferRun || mClock->wait()) {
+        
+        ioFlags = 0;
+        mBufferQueuesReportedNotFull = 0;
+        
+        {
+            // Acquire the state lock, and then do a process run.
+            std::lock_guard<std::mutex> lock(mStateMutex);
+            
+            // Cancellation flag?
+            q->process(&ioFlags);
+        }
+        
+        /*
+         * Two cases where extra buffering may occur:
+         * 1. All sources have reported they can take atleast 1 more buffer.
+         * 2. There are no active sources, but the stage is using internal
+         *    buffering and it is hinting that it can buffer more.
+         */
+        doBufferRun = ((mBufferQueuesReportedNotFull > 0) && (mBufferQueuesReportedNotFull == activeSources)) ||
+        ((ioFlags & Stage::kProcessMoreHint) && (activeSources == 0));
+        
+    }
+    
+    INFO_THIS("Stage::asyncProcessLoop") << "Asynchronous processing thread "
+    << std::this_thread::get_id() << " exiting." << std::endl;
+}
+
+void StagePrivate::startAsyncProcess(){
+    
+    if( !mProcessingThread.joinable() ){
+        
+        // Start the clock.
+        mClock->start();
+        mProcessingThread = std::thread(&StagePrivate::asyncProcessLoop, this);
+        
+        INFO_THIS("Stage::startAsyncProcess") << "Started asynchronous "
+        "processing thread " << mProcessingThread.get_id() << "." << std::endl;
+    }
+    else
+    {
+        NOTICE_THIS("Stage::startAsyncProcess") << "Asynchronous processing "
+        "thread already started." << std::endl;
+    }
+    
+}
+
+void StagePrivate::stopAsyncProcess() {
+    
+    if( mProcessingThread.joinable() ){
+        
+        TRACE_THIS("Stage::stopAsyncProcess") << "Waiting for asynchronous "
+        "processing thread to stop." << std::endl;
+        
+        // Stop the clock. Processing thread will exit.
+        mClock->stop();
+        mProcessingThread.join();
+    }
+}
+
+void StagePrivate::deactivateNoLock() {
+    
+    A_Q(Stage);
     
     // If the stage is in the playing state, stop playback.
-    if( mState == kPlaying ) {
+    if( mState == Stage::kPlaying ) {
         // Stop playback. Use no-lock variant since we have the state lock.
         stopNoLock();
     }
     
     // If the stage is activated, proceed to deactivate it.
-    if( mState == kActivated ) {
+    if( mState == Stage::kActivated ) {
         
         // Reset sources (clears synchronicity and empties buffers).
-        for(SourceIterator iter = mSources.begin(), end = mSources.end();
+        for(Stage::SourceIterator iter = q->mSources.begin(), end = q->mSources.end();
             iter != end; ++iter)
         {
-            iter->second->reset();
+            q->resetPort(iter->second.get());
         }
         
         // Remove pipeline.
         mParentPipeline = nullptr;
         
         // Record state.
-        mState = kDeactivated;
+        mState = Stage::kDeactivated;
         
         INFO_THIS("Stage::deactivate") << "Deactivated." << std::endl;
     }
 }
 
-void Stage::deactivate() {
-    std::lock_guard<std::mutex> lock(mStateMutex);
-    deactivateNoLock();
-}
-
-void Stage::play(ClockProvider &clockProvider) {
+void StagePrivate::stopNoLock() {
     
-    std::lock_guard<std::mutex> lock(mStateMutex);
-
-    // Activated (Stopped) -> Playing
-    if( mState == kActivated ) {
-        
-        // Determine synchronicity.
-        mAsynchronousProcessing = shouldRunAsynchronous();
-        
-        TRACE_THIS("Stage::play") << "Stage will run "
-        << (mAsynchronousProcessing ? "asynchronously." : "synchronously.")
-        << std::endl;
-        
-        // Assign synchronicity mode to the sources.
-        SynchronicityMode mode = (mAsynchronousProcessing) ? kAsynchronous : kSynchronous;
-        
-        for(SourceIterator iter = mSources.begin(), end = mSources.end();
-            iter != end; ++iter)
-        {
-            iter->second->mShared->mLinkSynchronicity = mode;
-        }
-        
-        // Start the clock
-        // NOTE: Clock must be started before beginPlayback().
-        if( mAsynchronousProcessing ){
-            mClock = new Clock;
-            clockProvider.registerClock(static_cast<Clock*>(mClock));
-        }
-
-        // Begin playback callback.
-        // NOTE: Must occur before buffers are processing.
-        beginPlayback();
- 
-        // If asynchronous, start the processing thread.
-        if( mAsynchronousProcessing ) {
-            startAsyncProcess();
-        }
-        
-        // Record the state.
-        mState = kPlaying;
-        
-        INFO_THIS("Stage::play") << "Playing." << std::endl;
-    }
+    A_Q(Stage);
     
-}
-
-void Stage::stop() {
-    std::lock_guard<std::mutex> lock(mStateMutex);
-    stopNoLock();
-}
-
-void Stage::stopNoLock() {
-    
-    if( mState == kPlaying ) {
+    if( mState == Stage::kPlaying ) {
         
         if( mAsynchronousProcessing ) {
             // If asynchronous, stop the processing thread.
@@ -373,20 +370,278 @@ void Stage::stopNoLock() {
         
         // Playback stopped callback. Must occur after all buffers are
         // processed.
-        stoppedPlayback();
-
+        q->stoppedPlayback();
+        
         // Record the state.
-        mState = kActivated;
+        mState = Stage::kActivated;
     }
+}
+
+void StagePrivate::beginReconfiguration(StageReconfigurationData &data) {
+    
+    // Lock the state mutex. This will prevent any process() runs.
+    mStateMutex.lock();
+    
+    // Store previous state.
+    data.mState = mState;
+}
+
+void StagePrivate::endReconfiguration(StageReconfigurationData& data) {
+    
+    // If the previou state was playing, call the online-reconfiguration
+    // handler.
+    if( data.mState == Stage::kPlaying ) {
+        A_Q(Stage);
+        q->reconfigureIO();
+    }
+    
+    // Unlock the state mutex. Process() runs can occur after this.
+    mStateMutex.unlock();
+}
+
+/* Stage */
+
+Stage::Stage() : d_ptr(new StagePrivate(this)){
+    
+}
+
+Stage::~Stage() {
+    delete d_ptr;
+}
+
+const Clock* Stage::clock() const {
+    A_D(const Stage);
+    return d->mClock;
+}
+
+Pipeline* Stage::pipeline() const {
+    A_D(const Stage);
+    return d->mParentPipeline;
+}
+
+Stage::State Stage::state() const {
+    A_D(const Stage);
+    return d->mState;
+}
+
+bool Stage::activate(Pipeline *pipeline) {
+    
+    A_D(Stage);
+    
+    std::lock_guard<std::mutex> lock(d->mStateMutex);
+    
+    // Deactivated -> Activated.
+    if( d->mState == kDeactivated ) {
+        
+        // Set the pipeline.
+        d->mParentPipeline = pipeline;
+        
+        // Switch state to activated.
+        d->mState = kActivated;
+        
+        INFO_THIS("Stage::activate") << "Activated." << std::endl;
+        
+        return true;
+    }
+    
+    return false;
+}
+
+void Stage::deactivate() {
+    
+    A_D(Stage);
+    
+    std::lock_guard<std::mutex> lock(d->mStateMutex);
+    d->deactivateNoLock();
+}
+
+void Stage::play(ClockProvider &clockProvider) {
+    
+    A_D(Stage);
+    
+    std::lock_guard<std::mutex> lock(d->mStateMutex);
+
+    // Activated (Stopped) -> Playing
+    if( d->mState == kActivated ) {
+        
+        // Determine synchronicity.
+        d->mAsynchronousProcessing = d->shouldRunAsynchronous();
+        
+        TRACE_THIS("Stage::play") << "Stage will run "
+        << (d->mAsynchronousProcessing ? "asynchronously." : "synchronously.")
+        << std::endl;
+        
+        // Assign synchronicity mode to the sources.
+        SynchronicityMode mode = (d->mAsynchronousProcessing) ? kAsynchronous : kSynchronous;
+        
+        for(SourceIterator iter = mSources.begin(), end = mSources.end();
+            iter != end; ++iter)
+        {
+            iter->second->mShared->mLinkSynchronicity = mode;
+        }
+        
+        // Start the clock
+        // NOTE: Clock must be started before beginPlayback().
+        if( d->mAsynchronousProcessing ){
+            d->mClock = new Clock;
+            clockProvider.registerClock(static_cast<Clock*>(d->mClock));
+        }
+
+        // Begin playback callback.
+        // NOTE: Must occur before buffers are processing.
+        beginPlayback();
+ 
+        // If asynchronous, start the processing thread.
+        if( d->mAsynchronousProcessing ) {
+            d->startAsyncProcess();
+        }
+        
+        // Record the state.
+        d->mState = kPlaying;
+        
+        INFO_THIS("Stage::play") << "Playing." << std::endl;
+    }
+    
+}
+
+void Stage::stop() {
+    
+    A_D(Stage);
+    
+    std::lock_guard<std::mutex> lock(d->mStateMutex);
+    d->stopNoLock();
+}
+
+
+void Stage::push(Source *source, ManagedBuffer &buffer)
+{
+    SourceSinkPrivate *shared = source->mShared.get();
+    
+    if( !shared->mBufferQueue.push(buffer) ) {
+        // Buffer couldn't be inserted due to the queue being full. This should
+        // not happen unless the downstream sink isn't working properly.
+        WARNING_THIS("Stage::Source::push") << "Failed to push buffer." << std::endl;
+        return;
+    }
+    
+    if( shared->mLinkSynchronicity == kAsynchronous ) {
+        
+        // Report if the buffer queue is not full.
+        if( !shared->mBufferQueue.full() ) {
+            A_D(Stage);
+            d->mBufferQueuesReportedNotFull++;
+        }
+        
+        shared->mPushNotification.notify_one();
+    }
+}
+
+Stage::PullResult Stage::pull(Sink *sink, ManagedBuffer *outBuffer )
+{
+    SourceSinkPrivate *shared = sink->mShared;
+    
+    switch(shared->mLinkSynchronicity) {
+        case kAsynchronous: {
+            
+            std::unique_lock<std::mutex> lock(shared->mPushMutex);
+            
+            // Wait for a buffer to be pushed into the queue.
+            while(shared->mBufferQueue.empty()) {
+                shared->mPushNotification.wait(lock);
+                
+                if( sink->mPullCancelled ) {
+                    sink->mPullCancelled = false;
+                    return kCancelled;
+                }
+            }
+        }
+        case kSynchronous: {
+            
+            A_D(Stage);
+
+            sink->mLinkedSource->mStage->syncProcessLoop(d->mClock);
+        }
+    }
+
+    if( !shared->mBufferQueue.pop(outBuffer) ) {
+        return kBufferQueueEmpty;
+    }
+    
+    // Check if the buffer's format matches the sink's format.
+    if( (*outBuffer)->format() != sink->mBufferFormat ) {
+        if( !reconfigureInputFormat(*sink, (*outBuffer)->format()) ){
+            return kUnsupportedFormat;
+        }
+        
+        // Format accepted.
+        sink->mBufferFormat = (*outBuffer)->format();
+    }
+    
+    return kSuccess;
+}
+
+Stage::PullResult Stage::tryPull(Sink *sink, ManagedBuffer *outBuffer) {
+    
+    SourceSinkPrivate *shared = sink->mShared;
+    
+    if( shared->mLinkSynchronicity == kAsynchronous ) {
+        if( !shared->mBufferQueue.pop(outBuffer) ) {
+            return kBufferQueueEmpty;
+        }
+    }
+    else {
+        // tryPull makes no sense on synchronous sources because we can't
+        // control the types of pulls performed upstream.
+        return kNotAsynchronous;
+    }
+    
+    // Check if the buffer's format matches the sink's format.
+    if( (*outBuffer)->format() != sink->mBufferFormat ) {
+        if( !reconfigureInputFormat(*sink, (*outBuffer)->format()) ){
+            return kUnsupportedFormat;
+        }
+        
+        // Format accepted.
+        sink->mBufferFormat = (*outBuffer)->format();
+    }
+    
+    return kSuccess;
+}
+
+void Stage::cancelPull(Sink *sink)
+{
+    SourceSinkPrivate *shared = sink->mShared;
+    
+    // No-op in synchronous mode.
+    if( shared->mLinkSynchronicity == kAsynchronous ) {
+        
+        std::lock_guard<std::mutex> lock(shared->mPushMutex);
+        
+        // Set cancellation flag.
+        sink->mPullCancelled = true;
+        
+        // Notify any waiting pulls that it can cancel its wait.
+        shared->mPushNotification.notify_one();
+    }
+}
+
+void Stage::resetPort(Source *source) {
+    // Clear the queue.
+    source->mShared->mBufferQueue.clear();
+}
+
+void Stage::resetPort(Sink *sink) {
+    sink->mBufferFormat = BufferFormat();
 }
 
 
 
 void Stage::addSource(const std::string &name) {
     
-    if( mState == kDeactivated ){
-        mSources.insert(std::make_pair(name,
-                                       std::unique_ptr<Source>(new Source(this))));
+    A_D(Stage);
+    
+    if( d->mState == kDeactivated ){
+        mSources.insert(std::make_pair(name, std::unique_ptr<Source>(new Source(d))));
     }
     else {
         NOTICE_THIS("Stage::addSource") << "Can't add source unless stage is "
@@ -395,38 +650,16 @@ void Stage::addSource(const std::string &name) {
 }
 
 void Stage::addSink(const std::string &name) {
-    if( mState == kDeactivated ) {
-        mSinks.insert(std::make_pair(name,
-                                     std::unique_ptr<Sink>(new Sink(this))));
+
+    A_D(Stage);
+
+    if( d->mState == kDeactivated ) {
+        mSinks.insert(std::make_pair(name, std::unique_ptr<Sink>(new Sink(d))));
     }
     else {
         NOTICE_THIS("Stage::addSink") << "Can't add sink unless stage is "
         "deactivated." << std::endl;
     }
-}
-
-
-
-
-void Stage::beginReconfiguration(ReconfigureData &data) {
-
-    // Lock the state mutex. This will prevent any process() runs.
-    mStateMutex.lock();
-
-    // Store previous state.
-    data.mState = mState;
-}
-
-void Stage::endReconfiguration(ReconfigureData& data) {
-    
-    // If the previou state was playing, call the online-reconfiguration
-    // handler.
-    if( data.mState == kPlaying ) {
-        reconfigureIO();
-    }
-    
-    // Unlock the state mutex. Process() runs can occur after this.
-    mStateMutex.unlock();
 }
 
 
@@ -453,7 +686,7 @@ bool Stage::replace(Source *current, Source *next, Sink *sink) {
     // Only replace if the ports are linked to each other.
     if( (current->mLinkedSink == sink) && (sink->mLinkedSource == current) ) {
 
-        ReconfigureData sinkData, currentSourceData, nextSourceData;
+        StageReconfigurationData sinkData, currentSourceData, nextSourceData;
         
         sink->mStage->beginReconfiguration(sinkData);
         current->mStage->beginReconfiguration(currentSourceData);
@@ -495,7 +728,7 @@ bool Stage::link( Source *source, Sink *sink )
     
     if( (source->mLinkedSink == nullptr) && (sink->mLinkedSource == nullptr) ) {
         
-        ReconfigureData sinkData, sourceData;
+        StageReconfigurationData sinkData, sourceData;
         
         sink->mStage->beginReconfiguration(sinkData);
         source->mStage->beginReconfiguration(sourceData);
@@ -531,7 +764,7 @@ void Stage::unlink( Source *source, Sink *sink )
     // Only unlink if the ports are linked to each other.
     if( (source->mLinkedSink == sink) && (sink->mLinkedSource == source) ) {
 
-        ReconfigureData sinkData, sourceData;
+        StageReconfigurationData sinkData, sourceData;
         
         sink->mStage->beginReconfiguration(sinkData);
         source->mStage->beginReconfiguration(sourceData);
@@ -555,6 +788,11 @@ void Stage::unlink( Source *source, Sink *sink )
 }
 
 
+
+
+
+
+
 /* Stage::SourceSinkPrivate */
 
 Stage::SourceSinkPrivate::SourceSinkPrivate() :
@@ -571,7 +809,7 @@ Stage::SourceSinkPrivate::~SourceSinkPrivate() {
 
 /* Stage::Source */
 
-Stage::Source::Source( Stage *stage ) :
+Stage::Source::Source(StagePrivate *stage) :
     mStage(stage),
     mLinkedSink(nullptr),
     mShared(new Stage::SourceSinkPrivate)
@@ -605,39 +843,11 @@ bool Stage::Source::checkFormatSupport(const BufferFormat &format) const
     return false;
 }
 
-void Stage::Source::push(ManagedBuffer &buffer)
-{
-    if( !mShared->mBufferQueue.push(buffer) ) {
-        // Buffer couldn't be inserted due to the queue being full. This should
-        // not happen unless the downstream sink isn't working properly.
-        WARNING_THIS("Stage::Source::push") << "Failed to push buffer." << std::endl;
-        return;
-    }
-    
-    if( mShared->mLinkSynchronicity == kAsynchronous ) {
-        
-        // Report if the buffer queue is not full.
-        if( !mShared->mBufferQueue.full() ) {
-            mStage->reportBufferQueueIsNotFull();
-        }
-        
-        mShared->mPushNotification.notify_one();
-    }
-    
-
-}
-
-
-void Stage::Source::reset() {
-    // Clear the queue.
-    mShared->mBufferQueue.clear();
-}
-
 
 
 /* Stage::Sink */
 
-Stage::Sink::Sink( Stage *stage ) :
+Stage::Sink::Sink(StagePrivate *stage) :
     mStage(stage),
     mLinkedSource(nullptr),
     mShared(nullptr),
@@ -656,10 +866,6 @@ Stage::Sink::~Sink() {
     
 }
 
-void Stage::Sink::reset() {
-    mBufferFormat = BufferFormat();
-}
-
 bool Stage::Sink::isLinked() const {
     return (mLinkedSource != nullptr);
 }
@@ -675,83 +881,4 @@ bool Stage::Sink::checkFormatSupport( const BufferFormat &format ) const
     return true;
 }
 
-Stage::Sink::PullResult Stage::Sink::pull( ManagedBuffer *outBuffer )
-{
-    switch(mShared->mLinkSynchronicity) {
-        case kAsynchronous: {
-            
-            std::unique_lock<std::mutex> lock(mShared->mPushMutex);
-            
-            // Wait for a buffer to be pushed into the queue.
-            while(mShared->mBufferQueue.empty()) {
-                mShared->mPushNotification.wait(lock);
 
-                if( mPullCancelled ) {
-                    mPullCancelled = false;
-                    return kCancelled;
-                }
-            }
-        }
-        case kSynchronous: {
-            // TODO: Should there be a check if the buffer queue is empty?
-            mLinkedSource->mStage->syncProcessLoop(mStage->mClock);
-        }
-    }
-    
-    if( !mShared->mBufferQueue.pop(outBuffer) ) {
-        return kBufferQueueEmpty;
-    }
-    
-    // Check if the buffer's format matches the sink's format.
-    if( (*outBuffer)->format() != mBufferFormat ) {
-        if( !mStage->reconfigureInputFormat(*this, (*outBuffer)->format()) ){
-            return kUnsupportedFormat;
-        }
-        
-        // Format accepted.
-        mBufferFormat = (*outBuffer)->format();
-    }
-    
-    return kSuccess;
-}
-
-Stage::Sink::PullResult Stage::Sink::tryPull(ManagedBuffer *outBuffer) {
-    
-    if( mShared->mLinkSynchronicity == kAsynchronous ) {
-        if( !mShared->mBufferQueue.pop(outBuffer) ) {
-            return kBufferQueueEmpty;
-        }
-    }
-    else {
-        // tryPull makes no sense on synchronous sources because we can't
-        // control the types of pulls performed upstream.
-        return kNotAsynchronous;
-    }
-    
-    // Check if the buffer's format matches the sink's format.
-    if( (*outBuffer)->format() != mBufferFormat ) {
-        if( !mStage->reconfigureInputFormat(*this, (*outBuffer)->format()) ){
-            return kUnsupportedFormat;
-        }
-        
-        // Format accepted.
-        mBufferFormat = (*outBuffer)->format();
-    }
-    
-    return kSuccess;
-}
-
-void Stage::Sink::cancelPull()
-{
-    // No-op in synchronous mode.
-    if( mShared->mLinkSynchronicity == kAsynchronous ) {
-        
-        std::lock_guard<std::mutex> lock(mShared->mPushMutex);
-        
-        // Set cancellation flag.
-        mPullCancelled = true;
-        
-        // Notify any waiting pulls that it can cancel its wait.
-        mShared->mPushNotification.notify_one();
-    }
-}
