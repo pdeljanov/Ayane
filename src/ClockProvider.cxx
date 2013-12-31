@@ -10,12 +10,29 @@
 
 using namespace Ayane;
 
-ClockProvider::ClockProvider() {
+ClockProvider::ClockProvider(ClockCapabilities capabilities, uint64_t defaultPeriod) :
+mCapabilities(capabilities),
+mClockPeriod(defaultPeriod)
+{
 
 }
 
 ClockProvider::~ClockProvider() {
     
+}
+
+bool ClockProvider::setClockPeriod(uint64_t period) {
+
+    if((period <= mCapabilities.maxPeriod) &&
+       (period >= mCapabilities.minPeriod))
+    {
+        mClockPeriod = period;
+        return true;
+    }
+    else {
+        return false;
+    }
+
 }
 
 void ClockProvider::registerClock(Clock *clock) {

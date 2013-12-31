@@ -78,9 +78,7 @@ namespace Ayane {
         Clock *mClock;
         uint32_t mBufferQueuesReportedNotFull;
         
-        Pipeline *mParentPipeline;
-        
-        
+        MessageBus *mMessageBus;
     };
     
     /**
@@ -116,7 +114,8 @@ StagePrivate::StagePrivate(Stage *q) :  q_ptr(q),
                                         mState(Stage::kDeactivated),
                                         mAsynchronousProcessing(false),
                                         mClock(nullptr),
-                                        mBufferQueuesReportedNotFull(0)
+                                        mBufferQueuesReportedNotFull(0),
+                                        mMessageBus(nullptr)
 {
     
 }
@@ -286,7 +285,7 @@ void StagePrivate::asyncProcessLoop() {
 
 void StagePrivate::startAsyncProcess(){
     
-    if( !mProcessingThread.joinable() ){
+    if(!mProcessingThread.joinable()){
         
         // Start the clock.
         mClock->start();
@@ -305,7 +304,7 @@ void StagePrivate::startAsyncProcess(){
 
 void StagePrivate::stopAsyncProcess() {
     
-    if( mProcessingThread.joinable() ){
+    if(mProcessingThread.joinable()){
         
         TRACE_THIS("Stage::stopAsyncProcess") << "Waiting for asynchronous "
         "processing thread to stop." << std::endl;
@@ -336,8 +335,8 @@ void StagePrivate::deactivateNoLock() {
             q->resetPort(iter->second.get());
         }
         
-        // Remove pipeline.
-        mParentPipeline = nullptr;
+        // Remove the message bus.
+        mMessageBus = nullptr;
         
         // Record state.
         mState = Stage::kDeactivated;
@@ -414,9 +413,9 @@ const Clock* Stage::clock() const {
     return d->mClock;
 }
 
-Pipeline* Stage::pipeline() const {
+MessageBus* Stage::messageBus() const {
     A_D(const Stage);
-    return d->mParentPipeline;
+    return d->mMessageBus;
 }
 
 Stage::State Stage::state() const {
@@ -424,7 +423,7 @@ Stage::State Stage::state() const {
     return d->mState;
 }
 
-bool Stage::activate(Pipeline *pipeline) {
+bool Stage::activate(MessageBus *messageBus) {
     
     A_D(Stage);
     
@@ -434,7 +433,7 @@ bool Stage::activate(Pipeline *pipeline) {
     if( d->mState == kDeactivated ) {
         
         // Set the pipeline.
-        d->mParentPipeline = pipeline;
+        d->mMessageBus = messageBus;
         
         // Switch state to activated.
         d->mState = kActivated;
@@ -536,7 +535,7 @@ void Stage::push(Source *source, ManagedBuffer &buffer)
     }
 }
 
-Stage::PullResult Stage::pull(Sink *sink, ManagedBuffer *outBuffer )
+Stage::PullResult Stage::pull(Sink *sink, ManagedBuffer *outBuffer)
 {
     SourceSinkPrivate *shared = sink->mShared;
     

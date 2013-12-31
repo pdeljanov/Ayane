@@ -115,7 +115,7 @@ bool Pipeline::activate() {
              iter != end; ++iter)
         {
             // Activate stage with ownership given to the pipeline.
-            if( !(*iter)->activate(this) ){
+            if( !(*iter)->activate(&d->mMessageBus) ){
                 
                 ERROR_THIS("Pipeline::activate") << "Stage " << iter->get() <<
                 " failed to activate." << std::endl;

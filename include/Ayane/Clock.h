@@ -29,7 +29,8 @@ namespace Ayane {
         virtual ~Clock();
         
         /**
-         *  Gets the current timestamp of the pipeline.
+         *  Gets the current timestamp of the pipeline. The pipeline timestamp
+         *  is driven by the selected clock provider.
          */
         double pipelineTime() const {
             return mPipelineTime;

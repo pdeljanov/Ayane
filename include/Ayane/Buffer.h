@@ -197,6 +197,9 @@ namespace Ayane {
         virtual Buffer& operator<< ( const MultiChannel7<SampleFloat32>& ) = 0;
         virtual Buffer& operator<< ( const MultiChannel7<SampleFloat64>& ) = 0;
         
+        virtual Buffer &operator<< ( const Buffer& ) = 0;
+        virtual Buffer &operator<< ( RawBuffer& ) = 0;
+        
         /* Readers */
         
         virtual Buffer& operator>> ( Mono<SampleInt16>& ) = 0;
@@ -239,21 +242,57 @@ namespace Ayane {
         virtual Buffer& operator>> ( MultiChannel7<SampleFloat32>& ) = 0;
         virtual Buffer& operator>> ( MultiChannel7<SampleFloat64>& ) = 0;
         
-        /* --- Buffer Ops Overloads --- */
-        
-        /*
-         * These are buffer sized operators. Unlike the frame-sized shift operators, overhead is not
-         * a critical consideration since the number of frames processed will be very high.
-         */
-        
-        virtual Buffer &operator<< ( const Buffer& ) = 0;
-        virtual Buffer &operator<< ( RawBuffer& ) = 0;
-        
         virtual Buffer &operator>> ( Buffer& ) = 0;
         virtual Buffer &operator>> ( RawBuffer& ) = 0;
         
-        //virtual Buffer &operator* ( const Buffer& ) = 0;
+        /* --- Math Ops --- */
+
+        /*
+         * Math operators provide buffer-sized operations. We do not provide
+         * operators for all the mathematical functions because most do not
+         * make sense or would have limited utility and would be better
+         * accomplished using another interface.
+         *
+         * Why do multiply and divide take float or double constants? 
+         * Mainly because multiplying by a real constant is applicable to all
+         * underlying sample types.  For example, if the underlying buffer is
+         * of type SampleInt16, and you want to halve the amplitude of the 
+         * signal, you simply must multiply by 0.5f. The equivalent operation
+         * done purely in integer math would be much more complex and likely
+         * have no benefit.
+         *
+         * Why do addition and subtraction operators only work on buffers?
+         * This is to mainly allow easy mixing of buffers. Adding a constant to
+         * every frame was not included because: 1) It provides limited utility
+         * (generally DC offsets aren't that useful), and 2) It would make code
+         * more confusing when their is automatic sample format conversion.
+         *
+         * What if I need to do some complex math?
+         * A better choice would be the Buffer Operations interface which allow
+         * complex read-modify-write operations to be performed on the buffer.
+         *
+         */
         
+        //virtual Buffer &operator*= ( float ) = 0;
+        //virtual Buffer &operator*= ( double ) = 0;
+
+        //Buffer &operator/= ( float ) = 0;
+        //Buffer &operator/= ( double ) = 0;
+        
+        
+        
+        
+
+        //virtual Buffer &operator+= ( const Buffer& ) = 0;
+
+        //virtual Buffer &operator-= ( const Buffer& ) = 0;
+        
+        
+
+        
+        
+        
+
     protected:
         
         BufferFormat mFormat;

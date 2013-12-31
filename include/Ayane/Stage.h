@@ -15,7 +15,7 @@
 #include "Ayane/BufferPool.h"
 #include "Ayane/BufferQueue.h"
 #include "Ayane/ClockProvider.h"
-#include "Ayane/Pipeline.h"
+#include "Ayane/MessageBus.h"
 
 #include <memory>
 #include <mutex>
@@ -168,7 +168,7 @@ namespace Ayane {
         /**
          *  Activates the stage to prepare it for playback. Thread-safe.
          */
-        bool activate(Pipeline *pipeline = nullptr);
+        bool activate(MessageBus *messageBus = nullptr);
         
         /**
          *  Deactivates the stage. Thread-safe.
@@ -318,7 +318,7 @@ namespace Ayane {
          *  Gets the parent message bus on which the Stage can post a
          *  message.
          */
-        Pipeline *pipeline() const;
+        MessageBus *messageBus() const;
         
         /**
          *  Called by the Stage when the next set of buffers should be

@@ -68,14 +68,14 @@ namespace Ayane {
                                      UInt32 capacityFrames);
         
         
-        // AUNode render callback.
+        /// AUNode render callback.
         OSStatus render(AudioUnitRenderActionFlags		*ioActionFlags,
                         const AudioTimeStamp			    *inTimeStamp,
                         UInt32							 inBusNumber,
                         UInt32							 inNumberFrames,
                         AudioBufferList					*ioData);
         
-        // AUGraph render notification.
+        /// AUGraph render notification.
         OSStatus renderNotify(AudioUnitRenderActionFlags *ioActionFlags,
                               const AudioTimeStamp		 *inTimeStamp,
                               UInt32                      inBusNumber,
@@ -83,30 +83,34 @@ namespace Ayane {
                               AudioBufferList            *ioData);
         
         
-        // Audio Unit graph
+        /// Audio Unit graph
         AUGraph mAUGraph;
         
-        // Output node.
+        /// Output node.
         AUNode mAUOutput;
         
-        // Audio format for the AU graph.
+        /// Audio format for the AU graph.
         AudioStreamBasicDescription	mAUFormat;
         
-        // Channel layout for the AU graph.
+        /// Channel layout for the AU graph.
         std::unique_ptr<AudioChannelLayout>	mAUChannelLayout;
         
+        /// Number of audio frames per buffer for CoreAudio
         UInt32 mMaxFramesPerSlice;
         
-        double mPeriodPerFrame;
-        double mClockPeriod;
-        double mNextClockTick;
-        double mCurrentClockTick;
+        /// The time in nanoseconds from the last clock tick
+        UInt64 mLastClockTickHostTime;
         
+        /// The clock provider
         ClockProvider mClockProvider;
         
+        /// Pulled buffers queue
         BufferQueue mBuffers;
         
+        /// RawBuffer wrapper to wrap CoreAudio's AudioBufferList structure
         std::unique_ptr<RawBuffer> mAudioBufferListWrapper;
+        
+        /// The current buffer being used
         ManagedBuffer mCurrentBuffer;
     };
     
@@ -156,11 +160,17 @@ CoreAudioOutputPrivate::CoreAudioOutputPrivate() :
 mAUGraph(nullptr),
 mAUOutput(-1),
 mAUChannelLayout(nullptr),
+mMaxFramesPerSlice(0),
+mLastClockTickHostTime(0),
+mClockProvider(ClockCapabilities(0, 1000000000), 100000000),
 mBuffers(2)
 {
     /*
      * The AU graph will always use the canonical Core Audio format since the
      * buffers flowing through the audio engine are in an agnostic format.
+     *
+     * NOTE: Since we didn't zero the structure via a memset, don't delete any
+     *       "uncessary" property setters.
      */
     
     mAUFormat.mFormatID			= kAudioFormatLinearPCM;
@@ -1514,10 +1524,9 @@ bool CoreAudioOutput::beginPlayback() {
     
     // Don't actually start the device till a buffer is received.
     
-    // Kick off the clock.
-    d->mClockPeriod = 0.100;
-    d->mCurrentClockTick = 0.0;
-    d->mClockProvider.publish(d->mClockPeriod);
+
+    double clockPeriodInSeconds = ((double)d->mClockProvider.clockPeriod() / 1000000000.0);
+    d->mClockProvider.publish(clockPeriodInSeconds);
 
     return true;
 }
@@ -1695,10 +1704,7 @@ bool CoreAudioOutput::reconfigureInputFormat(const Sink &sink,
     }
 
     delete channelMap;
-    
-    /* Update the clock. */
-    d->mPeriodPerFrame = (1.0 / format.sampleRate());
-    
+
     /* Clear the buffer queue. */
     d->mCurrentBuffer.reset();
     d->mBuffers.clear();
@@ -1745,22 +1751,39 @@ OSStatus CoreAudioOutputPrivate::renderNotify(AudioUnitRenderActionFlags *ioActi
                                          UInt32 inNumberFrames,
                                          AudioBufferList *ioData)
 {
-#pragma unused(inTimeStamp)
+#pragma unused(inNumberFrames)
 #pragma unused(inBusNumber)
 #pragma unused(ioData)
     
     if( *ioActionFlags & kAudioUnitRenderAction_PreRender) {
         
-        mCurrentClockTick += (inNumberFrames * mPeriodPerFrame);
+        //
+        // mHostTime:   Host timestamp in nanoseconds
+        // mSampleTime: The sample count upto this point
+        //
+        // d(mHostTime)/10^9 == (mSampleTime/sampleRate)
+        //
+
+        // Our configured nominal clock period is mClockPeriod. Calculate the
+        // delta between the mLastClockTickHostTime and mHostTime. If the delta
+        // is larger than mClockPeriod, publish the delta to the clock provider
+        // and update mLastClockTickHostTime.
         
-        if( mCurrentClockTick >= mClockPeriod ){
-            mClockProvider.publish(mCurrentClockTick);
-            mCurrentClockTick = 0.0;
+        UInt64 delta = inTimeStamp->mHostTime - mLastClockTickHostTime;
+        
+        if (delta > mClockProvider.clockPeriod()) {
             
-            if( mCurrentBuffer ){
-                // Send a progress message.
-                //pipeline()->messageBus().publish(new ProgressMessage(mCurrentBuffer->timestamp()));
+            mLastClockTickHostTime = inTimeStamp->mHostTime;
+            double deltaInSeconds = ((double)delta / 1000000000.0);
+
+            mClockProvider.publish(deltaInSeconds);
+            
+            /*
+            if(mCurrentBuffer) {
+                A_Q(CoreAudio);
+                q->messageBus().publish(new ProgressMessage(mCurrentBuffer->timestamp()));
             }
+             */
         }
 
 	}
@@ -1781,6 +1804,8 @@ OSStatus CoreAudioOutputPrivate::render(AudioUnitRenderActionFlags *ioActionFlag
 #pragma unused(inTimeStamp)
 #pragma unused(inBusNumber)
     
+    // Update the buffer pointers for the RawBuffer wrapper. CoreAudio does not
+    // guarantee the ioData buffer pointers will remain the same.
     for(UInt32 i = 0; i < ioData->mNumberBuffers; ++i) {
         mAudioBufferListWrapper->mBuffers[i].mBuffer = ioData->mBuffers[i].mData;
     }
@@ -1806,6 +1831,7 @@ OSStatus CoreAudioOutputPrivate::render(AudioUnitRenderActionFlags *ioActionFlag
         }
         else {
             
+            // Going to want to throttle this...
             DEBUG_ONLY(WARNING_THIS("CoreAudioOutputPrivate::render") << "Underrun."
                        << std::endl);
             

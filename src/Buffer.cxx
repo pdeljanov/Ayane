@@ -97,10 +97,10 @@ TypedBuffer<T>::~TypedBuffer()
 template<typename T>
 void TypedBuffer<T>::buildChannelMap( ChannelMap map, Channels channels, T* base, unsigned int stride )
 {
-    /* m_bufs is an array of pointers. Each pointer points to an address within base. These addresses
-     * form the start addresses of the channel buffers. Channel pointers are stored in the canonical channel
-     * ordering. If a channel is not used, m_bufs for that channel index is null. The first pointer in
-     * m_bufs *must* be base as ChannelMap takes ownership of the memory.
+    /* map is an array of pointers. Each pointer points to an address within base. These addresses
+     * form the start addresses of the channel buffers. Channel pointers are indexed in the canonical channel
+     * ordering. If a channel is not used, map[channel index] is null. The first pointer in
+     * map *must* be base as ChannelMap takes ownership of the memory.
      */
     
     channels &= kChannelMask;
@@ -109,7 +109,7 @@ void TypedBuffer<T>::buildChannelMap( ChannelMap map, Channels channels, T* base
     map[0] = base;
     
     int i = 0;  // Channel we're testing.
-    int j = 0;  // Previous buffer index set to an address other than null.
+    int j = 0;  // Previous channel buffer index set to an address other than null.
     
     while( channels )
     {
@@ -296,8 +296,8 @@ void TypedBuffer<T>::read(TypedBuffer<OutSampleType> &buffer)
     Channels channels = (buffer.mFormat.channels() & mFormat.channels()) & kChannelMask;
     
     // Number of frames to copy.
-    unsigned int length = frames();
-    
+    unsigned int length = std::min(buffer.space(), mWriteIndex - mReadIndex);
+
     // Loop over each possible channel. As channels are converted and written,
     // unset that channel's bit. Loop will exit as soon as all channels present
     // have been processed.
@@ -442,7 +442,7 @@ force_inline void TypedBuffer<T>::write( const MultiChannel5<InSampleType> &i )
     mChannels[1][mWriteIndex] = SampleFormats::convertSample<InSampleType, T>(i.FR);
     
     writeChannel(kFrontCenter,     mChannels[2][mWriteIndex],  i.FC);
-    writeChannel(kLowFrequencyOne, mChannels[3][mWriteIndex], i.LFE);
+    writeChannel(kLowFrequencyOne, mChannels[3][mWriteIndex],  i.LFE);
     writeChannel(kBackLeft,        mChannels[4][mWriteIndex],  i.BL);
     writeChannel(kBackRight,       mChannels[5][mWriteIndex],  i.BR);
     writeChannel(kSideLeft,        mChannels[9][mWriteIndex],  i.SL);
@@ -507,7 +507,7 @@ void TypedBuffer<T>::write(const TypedBuffer<InSampleType> &buffer)
     Channels channels = (buffer.mFormat.channels() & mFormat.channels()) & kChannelMask;
     
     // Number of frames to copy.
-    unsigned int length = frames();
+    unsigned int length = std::min(buffer.available(), frames() - mWriteIndex);
     
     // Loop over each possible channel. As channels are converted and written,
     // unset that channel's bit. Loop will exit as soon as all channels present
