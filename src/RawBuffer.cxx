@@ -6,7 +6,7 @@
  *
  */
 
-#include "Ayane/Rawbuffer.h"
+#include "Ayane/RawBuffer.h"
 #include "Ayane/Buffer.h"
 
 using namespace Ayane;

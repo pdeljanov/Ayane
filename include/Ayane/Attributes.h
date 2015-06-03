@@ -71,6 +71,7 @@
 
     #define force_inline __attribute__((always_inline)) __inline__
     #define unreachable __builtin_unreachable
+    #define no_overlap __restrict__
 
 #elif defined(MSVC_COMPILER)
 // Microsoft Visual C

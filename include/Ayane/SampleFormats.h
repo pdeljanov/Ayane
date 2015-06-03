@@ -153,7 +153,7 @@ namespace Ayane {
          *  Converts many samples of InSampleType to OutSampleType.
          */
         template< typename InSampleType, typename OutSampleType >
-        static void convertMany( InSampleType *src, OutSampleType *dest, int count )
+        static void convertMany( InSampleType *no_overlap src, OutSampleType *no_overlap dest, int count )
         {
             for( int i = 0; i < count; ++i ) {
                 dest[i] = SampleFormats::convertSample<InSampleType, OutSampleType>(src[i]);
@@ -165,8 +165,8 @@ namespace Ayane {
          *  custom source buffer stride.
          */
         template< typename InSampleType, typename OutSampleType >
-        static void convertMany(InSampleType  *src, int srcStride,
-                                OutSampleType *dest, int count )
+        static void convertMany(InSampleType  *no_overlap src, int srcStride,
+                                OutSampleType *no_overlap dest, int count )
         {
             OutSampleType *end = dest + count;
             
@@ -182,7 +182,7 @@ namespace Ayane {
          *  custom destination buffer stride.
          */
         template< typename InSampleType, typename OutSampleType >
-        static void convertMany(InSampleType *src, OutSampleType *dest,
+        static void convertMany(InSampleType *no_overlap src, OutSampleType *no_overlap dest,
                                 int destStride,
                                 int count )
         {

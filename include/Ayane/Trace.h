@@ -11,6 +11,7 @@
 
 #include "Ayane/Macros.h"
 #include <ostream>
+#include <mutex>
 
 
 #if defined(NDEBUG)

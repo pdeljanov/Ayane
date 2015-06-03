@@ -27,8 +27,6 @@ if( ${CMAKE_GENERATOR} MATCHES "Xcode" )
 	set( CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LIBRARY "libc++" )
 endif()
 
-# Enable C++11 support. Use libc++ for C++11 support.
-set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++" )
 
 # Be strict (perhaps try -Weverything from time to time?).
 add_definitions(-Wall
@@ -61,8 +59,15 @@ if( ${CMAKE_SYSTEM_NAME} MATCHES "Darwin" )
 		include/Ayane/Outputs/CoreAudioOutput.h
 		)
 		
+	# Enable C++11 support. Use libc++ for C++11 support.
+	set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++" )
+		
 elseif( ${CMAKE_SYSTEM_NAME} MATCHES "Linux" )
-	message( FATAL_ERROR "Ayane does not support Linux yet." )
+	
+	# PulseAudio
+	
+	set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11" )
+	
 
 elseif( ${CMAKE_SYSTEM_NAME} MATCHES "Windows" )
 	message( FATAL_ERROR "Ayane does not support Windows yet." )
@@ -144,3 +149,5 @@ install(TARGETS Ayane
 		LIBRARY DESTINATION lib
 		ARCHIVE DESTINATION lib
 		)
+
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/include/Ayane" DESTINATION include)

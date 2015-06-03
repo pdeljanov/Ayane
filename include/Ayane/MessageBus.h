@@ -11,6 +11,7 @@
 
 #include <string>
 #include <functional>
+#include <atomic>
 
 #include "Ayane/Macros.h"
 #include "Ayane/DPointer.h"
