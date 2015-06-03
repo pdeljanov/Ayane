@@ -6,7 +6,12 @@
 
 cmake_minimum_required(VERSION 2.8)
 
-project(Ayane)
+# Make extra CMake modules available.
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH} )
+
+# Include internal macros the extra CMake modules might need.
+include(${CMAKE_MODULE_PATH}/MacroOptionalFindPackage.cmake)
+include(${CMAKE_MODULE_PATH}/MacroEnsureVersion.cmake)
 
 macro(add_prefix list_name prefix)
 	set(${list_name}_TMP)
@@ -19,57 +24,57 @@ macro(add_prefix list_name prefix)
 	unset(${list_name}_TMP)
 endmacro()
 
-# C++11
-
-# Force XCode to use C++11 since it ignores CXX flags.
-if( ${CMAKE_GENERATOR} MATCHES "Xcode" )
-	set( CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LANGUAGE_STANDARD "c++11" )
-	set( CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LIBRARY "libc++" )
-endif()
-
+# Ayane!
+project(Ayane)
 
 # Be strict (perhaps try -Weverything from time to time?).
-add_definitions(-Wall
-				-Wextra
-				)
-
-#add_definitions( -pedantic )
+add_definitions(-Wall -Wextra)
+#add_definitions(-pedantic)
 
 include_directories( "${CMAKE_SOURCE_DIR}/include" )
 
 # Platform dependent sources
 
-if( ${CMAKE_SYSTEM_NAME} MATCHES "Darwin" )
-			
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+
+	# CoreAudio
 	find_library(COREAUDIO_FRAMEWORK CoreAudio )
 	find_library(AUDIO_TOOLBOX_FRAMEWORK AudioToolbox )
 	find_library(AUDIO_UNIT_FRAMEWORK AudioUnit )
 
-	set( ayane_host_LIBS 
-		${COREAUDIO_FRAMEWORK}
-		${AUDIO_TOOLBOX_FRAMEWORK}
-		${AUDIO_UNIT_FRAMEWORK}
-		)
+	set(ayane_host_SRCS src/Outputs/CoreAudioOutput.cxx )
+	set(ayane_host_HDRS include/Ayane/Outputs/CoreAudioOutput.h)
+	
+	set(ayane_host_LIBS ${COREAUDIO_FRAMEWORK} ${AUDIO_TOOLBOX_FRAMEWORK} ${AUDIO_UNIT_FRAMEWORK})
 
-	set(ayane_host_SRCS
-		src/Outputs/CoreAudioOutput.cxx
-		)
+	# C++11 support on Darwin.
 	
-	set(ayane_host_HDRS
-		include/Ayane/Outputs/CoreAudioOutput.h
-		)
-		
-	# Enable C++11 support. Use libc++ for C++11 support.
-	set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++" )
-		
-elseif( ${CMAKE_SYSTEM_NAME} MATCHES "Linux" )
+	# Force XCode to use a C++11 standard library.
+	if(${CMAKE_GENERATOR} MATCHES "Xcode")
+		set( CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LANGUAGE_STANDARD "c++11" )
+		set( CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LIBRARY "libc++" )
+	endif()
 	
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++")
+
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+
 	# PulseAudio
-	
-	set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11" )
-	
+	find_package(PulseAudio)
 
-elseif( ${CMAKE_SYSTEM_NAME} MATCHES "Windows" )
+	if(PULSEAUDIO_FOUND)
+		set(ayane_host_SRCS src/Outputs/PulseAudioOutput.cxx)
+		set(ayane_host_HDRS include/Ayane/Outputs/PulseAudioOutput.h)
+		
+		set(ayane_host_LIBS ${PULSEAUDIO_LIBRARY})
+		
+		include_directories(${PULSEAUDIO_INCLUDE_DIR}})
+	endif()
+
+	# C++11 support on Linux.
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+	
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	message( FATAL_ERROR "Ayane does not support Windows yet." )
 
 else()
@@ -77,16 +82,15 @@ else()
 	
 endif()
 
-# Platform independent sources
-
+# Platform independent sources.
 set(ayane_SRCS
-    AlignedMemory.cxx
+	AlignedMemory.cxx
 	Buffer.cxx
 	BufferFactory.cxx
 	BufferFrames.cxx
 	BufferFormat.cxx
 	BufferLength.cxx
-    BufferPool.cxx
+	BufferPool.cxx
 	BufferQueue.cxx
 	Clock.cxx
 	ClockProvider.cxx
@@ -97,57 +101,55 @@ set(ayane_SRCS
 	Pipeline.cxx
 	RawBuffer.cxx
 	Stage.cxx
-    Trace.cxx
-  	)
-  	
+	Trace.cxx
+	)
 
 set(ayane_HDRS
-    AlignedMemory.h
-    Attributes.h
+	AlignedMemory.h
+	Attributes.h
 	Buffer.h
 	BufferFactory.h
 	BufferFrames.h
 	BufferFormat.h
 	BufferLength.h
-    BufferPool.h
+	BufferPool.h
 	BufferQueue.h
 	Channels.h
 	Clock.h
 	ClockProvider.h
 	Duration.h
-    DPointer.h
+	DPointer.h
 	SampleFormats.h
-    Macros.h
+	Macros.h
 	MessageBus.h
 	Pipeline.h
 	RawBuffer.h
 	Stage.h
-    Trace.h
+	Trace.h
 	)
 
 add_prefix(ayane_SRCS "src/")
 add_prefix(ayane_HDRS "include/Ayane/")
 
-### Targets ###
-
+# Ayane library build target.
 add_library(Ayane SHARED
-			# Platform independent sources
-			${ayane_SRCS} 
-			${ayane_HDRS} 
-			
-			# Host dependent sources
-			${ayane_host_SRCS}
-			${ayane_host_HDRS}
-			
-			# Host libraries (for frameworks)
-			${ayane_host_LIBS}
-			)
+		# Platform independent sources
+		${ayane_SRCS} 
+		${ayane_HDRS} 
+
+		# Host dependent sources
+		${ayane_host_SRCS}
+		${ayane_host_HDRS}
+
+		# Host libraries (for frameworks)
+		${ayane_host_LIBS}
+		)
 
 target_link_libraries(Ayane ${ayane_host_LIBS})
 
 install(TARGETS Ayane
-		LIBRARY DESTINATION lib
-		ARCHIVE DESTINATION lib
-		)
+	LIBRARY DESTINATION lib
+	ARCHIVE DESTINATION lib
+	)
 
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/include/Ayane" DESTINATION include)
