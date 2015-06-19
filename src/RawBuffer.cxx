@@ -9,6 +9,8 @@
 #include "Ayane/RawBuffer.h"
 #include "Ayane/Buffer.h"
 
+#include <cstring>
+
 using namespace Ayane;
 
 RawBuffer::RawBuffer(uint32_t frames, uint32_t channels, SampleFormat format,
@@ -22,6 +24,8 @@ mChannelCount(channels)
 {
     
     mStride = planar ? 1 : channels;
+
+    std::memset(&mBuffers, sizeof(mBuffers), 0);
 }
 
 RawBuffer& RawBuffer::operator>> (Buffer& buffer) {
