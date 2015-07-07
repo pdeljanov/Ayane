@@ -181,14 +181,20 @@ namespace Ayane {
     // Get a writable memory location from PulseAudio.
     pa_stream_begin_write(mPAStream, &streamBuffer, &streamBufferLength);
 
+    const pa_sample_spec* sampleSpec = pa_stream_get_sample_spec(mPAStream);
+
     // Since we are just given a byteLength, get the frame size so we can calculate the number of
     // frames that will fit in the write pointer.
-    size_t frameSize = pa_frame_size(pa_stream_get_sample_spec(mPAStream));
+    size_t frameSize = pa_frame_size(sampleSpec);
+    size_t frames = streamBufferLength / frameSize;
 
     // Update the raw buffer wrapper to point to the new writeable stream buffer.
     mBufferWrapper->mBuffers[0].mBuffer = streamBuffer;
-    mBufferWrapper->mFrames = streamBufferLength / frameSize;
+    mBufferWrapper->mFrames = frames;
     mBufferWrapper->reset();  // Beware of .reset(), this kills the unique_ptr!
+
+    // Advance the presentation clock using the number of frames and sample rate to calculate the delta time.
+    mClockProvider.publish(static_cast<double>(frames)/sampleSpec->rate);
 
     // Copy as many frames as possible from the current audio buffer into the PulseAudio buffer.
     if(mCurrentBuffer && (mCurrentBuffer->available() > 0)) {
