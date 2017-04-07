@@ -314,44 +314,46 @@ void TypedBuffer<T>::read(TypedBuffer<OutSampleType> &buffer)
 template< typename T >
 void TypedBuffer<T>::read(RawBuffer &buffer) {
     
-    unsigned int length = std::min(buffer.space(), mWriteIndex - mReadIndex);
+    unsigned int length = std::min(buffer.writeable(), mWriteIndex - mReadIndex);
     
     // Loop through each channel available in the raw buffer.
-    for( uint32_t i = 0; i < buffer.mChannelCount; ++i ){
+    for( uint32_t i = 0; i < buffer.channels(); ++i ){
         
+        Channel channel = buffer.channel(i);
+
         // Skip the channel if the buffer doesn't support it.
-        if( !(mFormat.channels() & buffer.mBuffers[i].mChannel) ) {
+        if(0 == (mFormat.channels() & channel)) {
             continue;
         }
         
-        T *in = mChannels[CanonicalChannels::indexOf(buffer.mBuffers[i].mChannel)] + mReadIndex;
+        T *in = mChannels[CanonicalChannels::indexOf(channel)] + mReadIndex;
         
-        switch (buffer.mFormat) {
+        switch (buffer.format()) {
             case kInt16: {
                 SampleFormats::convertMany<T, SampleInt16>(in,
                                                            buffer.writeAs<SampleInt16>(i),
-                                                           buffer.mStride,
+                                                           buffer.stride(),
                                                            length);
                 continue;
             }
             case kInt32: {
                 SampleFormats::convertMany<T, SampleInt32>(in,
                                                            buffer.writeAs<SampleInt32>(i),
-                                                           buffer.mStride,
+                                                           buffer.stride(),
                                                            length);
                 continue;
             }
             case kFloat32: {
                 SampleFormats::convertMany<T, SampleFloat32>(in,
                                                              buffer.writeAs<SampleFloat32>(i),
-                                                             buffer.mStride,
+                                                             buffer.stride(),
                                                              length);
                 continue;
             }
             case kFloat64: {
                 SampleFormats::convertMany<T, SampleFloat64>(in,
                                                              buffer.writeAs<SampleFloat64>(i),
-                                                             buffer.mStride,
+                                                             buffer.stride(),
                                                              length);
                 continue;
             }
@@ -360,7 +362,7 @@ void TypedBuffer<T>::read(RawBuffer &buffer) {
         }
     }
     
-    buffer.mWriteIndex += length;
+    buffer.fill(length);
     mReadIndex += length;
 }
 
@@ -524,40 +526,42 @@ void TypedBuffer<T>::write(const TypedBuffer<InSampleType> &buffer)
 template< typename T >
 void TypedBuffer<T>::write( RawBuffer &buffer ) {
     
-    unsigned int length = std::min(buffer.available(), frames() - mWriteIndex);
+    unsigned int length = std::min(buffer.readable(), frames() - mWriteIndex);
 
     // Loop through each channel available in the raw buffer.
-    for( uint32_t i = 0; i < buffer.mChannelCount; ++i ){
+    for( uint32_t i = 0; i < buffer.channels(); ++i ){
         
+        Channel channel = buffer.channel(i);
+
         // Skip the channel if the buffer doesn't support it.
-        if( !(mFormat.channels() & buffer.mBuffers[i].mChannel) ) {
+        if(0 == (mFormat.channels() & channel)) {
             continue;
         }
         
-        T *out = mChannels[CanonicalChannels::indexOf(buffer.mBuffers[i].mChannel)] + mWriteIndex;
+        T *out = mChannels[CanonicalChannels::indexOf(channel)] + mWriteIndex;
         
-        switch (buffer.mFormat) {
+        switch (buffer.format()) {
             case kInt16: {
                 SampleFormats::convertMany<SampleInt16, T>(buffer.readAs<SampleInt16>(i),
-                                                           buffer.mStride,
+                                                           buffer.stride(),
                                                            out, length);
                 continue;
             }
             case kInt32: {
                 SampleFormats::convertMany<SampleInt32, T>(buffer.readAs<SampleInt32>(i),
-                                                           buffer.mStride,
+                                                           buffer.stride(),
                                                            out, length);
                 continue;
             }
             case kFloat32: {
                 SampleFormats::convertMany<SampleFloat32, T>(buffer.readAs<SampleFloat32>(i),
-                                                             buffer.mStride,
+                                                             buffer.stride(),
                                                              out, length);
                 continue;
             }
             case kFloat64: {
                 SampleFormats::convertMany<SampleFloat64, T>(buffer.readAs<SampleFloat64>(i),
-                                                             buffer.mStride,
+                                                             buffer.stride(),
                                                              out, length);
                 continue;
             }
@@ -566,7 +570,7 @@ void TypedBuffer<T>::write( RawBuffer &buffer ) {
         }
     }
     
-    buffer.mReadIndex += length;
+    buffer.consume(length);
     mWriteIndex += length;
 }
 

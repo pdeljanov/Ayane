@@ -1,3 +1,4 @@
+#include <string.h>
 /*
  *
  * Copyright (c) 2015 Philip Deljanov. All rights reserved.
@@ -10,6 +11,7 @@
 
 #include <vector>
 #include <memory>
+#include <chrono>
 
 #include "Ayane/MessageBus.h"
 #include "Ayane/Trace.h"
@@ -20,7 +22,7 @@
 #include "pulse/thread-mainloop.h"
 
 const std::string kPulseAudioContextName = "Ayane";
-const std::string kPulseAudioStreamName = "";
+const std::string kPulseAudioStreamName = "PulseAudio Output";
 
 namespace Ayane {
 
@@ -36,7 +38,7 @@ namespace Ayane {
     bool startOutput(const BufferFormat& format);
     void stopOutput();
 
-    inline void writeOutput(ManagedBuffer buffer){
+    inline void writeOutput(ManagedBuffer& buffer){
       mBuffers.push(buffer);
     }
 
@@ -64,6 +66,7 @@ namespace Ayane {
     void handlePulseAudioStreamWriteRequest(size_t byteLength);
     void handlePulseAudioStreamSuspended();
     void handlePulseAudioStreamUnderflow();
+    void handlePulseAudioStreamOverflow();
     void handlePulseAudioStreamOperationSuccess();
 
     inline void waitForPulseAudioStateChange() {
@@ -83,7 +86,7 @@ namespace Ayane {
     BufferQueue mBuffers;
 
     /// RawBuffer wrapper to wrap PulseAudio's raw output stream buffer.
-    std::unique_ptr<RawBuffer> mBufferWrapper;
+    RawBufferFormat mPulseRawBufferFormat;
 
     /// The current buffer being written out of Ayane to PulseAudio.
     ManagedBuffer mCurrentBuffer;
@@ -126,6 +129,11 @@ namespace Ayane {
     instance->handlePulseAudioStreamUnderflow();
   }
 
+  static void pulseAudioOutputPrivate_streamOverflowCallback(pa_stream* stream, void* user){
+    PulseAudioOutputPrivate* instance = static_cast<PulseAudioOutputPrivate*>(user);
+    instance->handlePulseAudioStreamOverflow();
+  }
+
   static void pulseAudioOutputPrivate_streamOperationSuccessCallback(pa_stream* stream, int success, void* user){
     PulseAudioOutputPrivate* instance = static_cast<PulseAudioOutputPrivate*>(user);
     instance->handlePulseAudioStreamOperationSuccess();
@@ -141,6 +149,8 @@ namespace Ayane {
 
     pa_operation_unref(operation);
 
+    INFO("DONE") << std::endl;
+
     return (PA_OPERATION_DONE == state);
   }
 
@@ -148,6 +158,7 @@ namespace Ayane {
   PulseAudioOutputPrivate::PulseAudioOutputPrivate() : 
     mClockProvider(ClockCapabilities(0, 1000000000), 100000000),
     mBuffers(2),
+    mPulseRawBufferFormat(kFloat32),
     mPAMainLoop(nullptr), 
     mPAContext(nullptr), 
     mPAStream(nullptr) {
@@ -166,7 +177,7 @@ namespace Ayane {
 
   void PulseAudioOutputPrivate::handlePulseAudioSubscriptionChanged(pa_subscription_event_type_t eventType, uint32_t index)
   {
-
+    INFO_THIS("PulseAudioOutputPrivate::handlePulseAudioStreamSuspended") << "Audio subscription changed." << std::endl;
   }
 
   void PulseAudioOutputPrivate::handlePulseAudioStreamStateChanged(pa_stream_state_t state)
@@ -176,10 +187,14 @@ namespace Ayane {
 
   void PulseAudioOutputPrivate::handlePulseAudioStreamWriteRequest(size_t byteLength){
     void* streamBuffer = nullptr;
-    size_t streamBufferLength = byteLength;
+    size_t streamBufferLength = (size_t) -1;
 
-    // Get a writable memory location from PulseAudio.
+    // Get a writable memory location from PulseAudio and its size.
+    // NOTE: The returned buffer length IS NOT the free space available for writing.
     pa_stream_begin_write(mPAStream, &streamBuffer, &streamBufferLength);
+
+    // Cap the amount of bytes that will be written to the requested byteLength.
+    streamBufferLength = std::min(streamBufferLength, byteLength);
 
     const pa_sample_spec* sampleSpec = pa_stream_get_sample_spec(mPAStream);
 
@@ -188,54 +203,60 @@ namespace Ayane {
     size_t frameSize = pa_frame_size(sampleSpec);
     size_t frames = streamBufferLength / frameSize;
 
-    // Update the raw buffer wrapper to point to the new writeable stream buffer.
-    mBufferWrapper->mBuffers[0].mBuffer = streamBuffer;
-    mBufferWrapper->mFrames = frames;
-    mBufferWrapper->reset();  // Beware of .reset(), this kills the unique_ptr!
+    RawBuffer rawBuffer(mPulseRawBufferFormat, frames, streamBuffer);
+    rawBuffer.rewind();
+
+    // INFO_THIS("PulseAudioOutputPrivate::handlePulseAudioStreamWriteRequest") << "requested=" << frames << ", byteLength=" << byteLength << std::endl;
+
+    // Attempt to continue filling the PulseAudio buffer.
+    while(rawBuffer.writeable() > 0) {
+
+        if(mCurrentBuffer && mCurrentBuffer->available() == 0) {
+            mCurrentBuffer.reset();
+        }
+
+        if(!mCurrentBuffer){
+            if(!mBuffers.pop(&mCurrentBuffer)) {
+                break;
+            }
+        }
+
+        *mCurrentBuffer >> rawBuffer;
+    }
+
+    // INFO_THIS("TIME") << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count() << std::endl;
+    // INFO_THIS("PulseAudioOutputPrivate::handlePulseAudioStreamWriteRequest") << "written=" << rawBuffer.framesWritten() << std::endl;
+
+    if(frames != rawBuffer.framesWritten()) {
+        WARNING_THIS("PulseAudioOutputPrivate::handlePulseAudioStreamWriteRequest") << "Short-changed." << std::endl;
+    }
+
+    if(rawBuffer.framesWritten() == 0) {
+        pa_stream_cancel_write(mPAStream);
+    }
+    else {
+        // Write to the stream.
+        pa_stream_write(mPAStream, streamBuffer, rawBuffer.framesWritten() * frameSize, nullptr, 0, PA_SEEK_RELATIVE);
+    }
 
     // Advance the presentation clock using the number of frames and sample rate to calculate the delta time.
     mClockProvider.publish(static_cast<double>(frames)/sampleSpec->rate);
-
-    // Copy as many frames as possible from the current audio buffer into the PulseAudio buffer.
-    if(mCurrentBuffer && (mCurrentBuffer->available() > 0)) {
-      *mCurrentBuffer >> *mBufferWrapper;
-    }
-
-    // Attempt to continue filling the PulseAudio buffer.
-    while(mBufferWrapper->space() > 0) {
-
-      // Release the current buffer if it hasn't been released.
-      if(mCurrentBuffer) {
-	mCurrentBuffer.reset();
-      }
-
-      // Try to get a new buffer.
-      if(mBuffers.pop(&mCurrentBuffer)) {
-	(*mCurrentBuffer) >> (*mBufferWrapper);
-      }
-      else {
-	
-	// If absolutely nothing was written, cancel the write and exit the request.
-	if(mBufferWrapper->mWriteIndex == 0) {
-	  pa_stream_cancel_write(mPAStream);
-	  return;
-	}
-      }
-
-    }
-
-    // Write to the stream.
-    pa_stream_write(mPAStream, streamBuffer, mBufferWrapper->mWriteIndex * frameSize, nullptr, 0, PA_SEEK_RELATIVE);
   }
 
   void PulseAudioOutputPrivate::handlePulseAudioStreamSuspended()
   {
+    INFO_THIS("PulseAudioOutputPrivate::handlePulseAudioStreamSuspended") << "Suspended." << std::endl;
 
   }
 
   void PulseAudioOutputPrivate::handlePulseAudioStreamUnderflow()
   {
     WARNING_THIS("PulseAudioOutputPrivate::handlePulseAudioStreamUnderflow") << "Underflow." << std::endl;
+  }
+
+  void PulseAudioOutputPrivate::handlePulseAudioStreamOverflow()
+  {
+    WARNING_THIS("PulseAudioOutputPrivate::handlePulseAudioStreamOverflow") << "Overflow." << std::endl;
   }
   
   void PulseAudioOutputPrivate::handlePulseAudioStreamOperationSuccess(){
@@ -291,6 +312,10 @@ namespace Ayane {
   
   void PulseAudioOutputPrivate::closeOutput()
   {
+    if(!mPAMainLoop){
+        return;
+    }
+
     // Stop the mainloop.
     pa_threaded_mainloop_stop(mPAMainLoop);
 
@@ -382,7 +407,7 @@ namespace Ayane {
     }
 
     // TODO: Allow connection to non-default server.
-    return (pa_context_connect(mPAContext, nullptr, static_cast<pa_context_flags_t>(0), nullptr) < 0);
+    return (pa_context_connect(mPAContext, nullptr, static_cast<pa_context_flags_t>(0), nullptr) == 0);
   }
 
   void PulseAudioOutputPrivate::disconnectFromPulseAudioServer()
@@ -435,7 +460,6 @@ namespace Ayane {
     return true;
   }
 
-
   bool PulseAudioOutputPrivate::createPulseAudioStream(const BufferFormat& format){
 
     // Create a sample spec that will match the input buffer format.
@@ -452,52 +476,52 @@ namespace Ayane {
 
     channelMap.channels = 0;
     
-    // While creating the PulseAudio channel map, fill out the buffer wrapper.
-    std::unique_ptr<RawBuffer> wrapper(new RawBuffer(0, sampleSpec.channels, kFloat32, false));
+    // While creating the PulseAudio channel map, fill out the raw buffer format wrapper.
+    RawBufferFormat pulseBufferFormat(kFloat32);
 
-    if(format.channels() & kFrontLeft){
-      channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_FRONT_LEFT;
-      wrapper->mBuffers[channelMap.channels].mChannel = kFrontLeft;
+    if(format.channels() & kFrontLeft) {
+        channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_FRONT_LEFT;
+        pulseBufferFormat.withChannel(kFrontLeft);
     }
-    if(format.channels() & kFrontRight){
-      channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_FRONT_RIGHT;
-      wrapper->mBuffers[channelMap.channels].mChannel = kFrontRight;
+    if(format.channels() & kFrontRight) {
+        channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_FRONT_RIGHT;
+        pulseBufferFormat.withChannel(kFrontRight);
     }
-    if(format.channels() & kFrontCenter){
-      channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_FRONT_CENTER;
-      wrapper->mBuffers[channelMap.channels].mChannel = kFrontCenter;
+    if(format.channels() & kFrontCenter) {
+        channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_FRONT_CENTER;
+        pulseBufferFormat.withChannel(kFrontCenter);
     }
-    if(format.channels() & kLowFrequencyOne){
-      channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_LFE;
-      wrapper->mBuffers[channelMap.channels].mChannel = kLowFrequencyOne;
+    if(format.channels() & kLowFrequencyOne) {
+        channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_LFE;
+        pulseBufferFormat.withChannel(kLowFrequencyOne);
     }
-    if(format.channels() & kBackLeft){
-      channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_REAR_LEFT;
-      wrapper->mBuffers[channelMap.channels].mChannel = kBackLeft;
+    if(format.channels() & kBackLeft) {
+        channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_REAR_LEFT;
+        pulseBufferFormat.withChannel(kBackLeft);
     }
-    if(format.channels() & kBackRight){
-      channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_REAR_RIGHT;
-      wrapper->mBuffers[channelMap.channels].mChannel = kBackRight;
+    if(format.channels() & kBackRight) {
+        channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_REAR_RIGHT;
+        pulseBufferFormat.withChannel(kBackRight);
     }
-    if(format.channels() & kFrontLeftOfCenter){
-      channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_FRONT_LEFT_OF_CENTER;
-      wrapper->mBuffers[channelMap.channels].mChannel = kFrontLeftOfCenter;
+    if(format.channels() & kFrontLeftOfCenter) {
+        channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_FRONT_LEFT_OF_CENTER;
+        pulseBufferFormat.withChannel(kFrontLeftOfCenter);
     }
-    if(format.channels() & kFrontRightOfCenter){
-      channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_FRONT_RIGHT_OF_CENTER;
-      wrapper->mBuffers[channelMap.channels].mChannel = kFrontRightOfCenter;
+    if(format.channels() & kFrontRightOfCenter) {
+        channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_FRONT_RIGHT_OF_CENTER;
+        pulseBufferFormat.withChannel(kFrontRightOfCenter);
     }
-    if(format.channels() & kBackCenter){
-      channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_REAR_CENTER;
-      wrapper->mBuffers[channelMap.channels].mChannel = kBackCenter;
+    if(format.channels() & kBackCenter) {
+        channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_REAR_CENTER;
+        pulseBufferFormat.withChannel(kBackCenter);
     }
-    if(format.channels() & kSideLeft){
-      channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_SIDE_LEFT;
-      wrapper->mBuffers[channelMap.channels].mChannel = kSideLeft;
+    if(format.channels() & kSideLeft) {
+        channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_SIDE_LEFT;
+        pulseBufferFormat.withChannel(kSideLeft);
     }
-    if(format.channels() & kSideRight){
-      channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_SIDE_RIGHT;
-      wrapper->mBuffers[channelMap.channels].mChannel = kSideRight;
+    if(format.channels() & kSideRight) {
+        channelMap.map[channelMap.channels++] = PA_CHANNEL_POSITION_SIDE_RIGHT;
+        pulseBufferFormat.withChannel(kSideRight);
     }
 
     mPAStream = pa_stream_new(mPAContext, kPulseAudioStreamName.c_str(), &sampleSpec, &channelMap);
@@ -507,20 +531,36 @@ namespace Ayane {
       return false;
     }
 
-    mBufferWrapper = std::move(wrapper);
+    mPulseRawBufferFormat = pulseBufferFormat;
 
     // Register stream callbacks.
     pa_stream_set_state_callback(mPAStream, pulseAudioOutputPrivate_streamStateCallback, this);
     pa_stream_set_write_callback(mPAStream, pulseAudioOutputPrivate_streamWriteCallback, this);
     pa_stream_set_suspended_callback(mPAStream, pulseAudioOutputPrivate_streamSuspendedCallback, this);
     pa_stream_set_underflow_callback(mPAStream, pulseAudioOutputPrivate_streamUnderflowCallback, this);
+    pa_stream_set_overflow_callback(mPAStream, pulseAudioOutputPrivate_streamOverflowCallback, this);
+
+    pa_buffer_attr attrs;
+    memset(&attrs, 0, sizeof(attrs));
+    attrs.tlength = pa_usec_to_bytes(200000, &sampleSpec);
+    attrs.minreq = pa_usec_to_bytes(100000, &sampleSpec);
+    attrs.maxlength = (uint32_t) -1;
+    attrs.prebuf = (uint32_t) 0;
+    attrs.fragsize = (uint32_t) -1;
 
     // Connect the stream to the sink (asynchronously).
-    if (pa_stream_connect_playback(mPAStream, nullptr, nullptr, pa_stream_flags_t(0), nullptr, nullptr) < 0) {
+    if (pa_stream_connect_playback(mPAStream, nullptr, &attrs, PA_STREAM_NOFLAGS, nullptr, nullptr) < 0) {
       ERROR_THIS("PulseAudioOutputPrivate::createPulseAudioStream") << "Failed to connect PulseAudio stream to sink." << std::endl;
       destroyPulseAudioStream();
       return false;
     }
+
+    INFO_THIS("PulseAudioOutputPrivate::createPulseAudioStream")
+        << "Reconfiguration successful. "
+        << format.sampleRate() << "Hz, Channels="
+        << format.channelCount() << ", ChannelLayout="
+        << std::hex << std::showbase << format.channels()
+        << std::noshowbase << std::dec << std::endl;
 
     return true;
   }
@@ -602,7 +642,7 @@ namespace Ayane {
     pa_threaded_mainloop_lock(mPAMainLoop);
 
     // Drain the output (synchronously)
-    if (PA_STREAM_READY == pa_stream_get_state(mPAStream)) {
+    if (false && mPAStream && PA_STREAM_READY == pa_stream_get_state(mPAStream)) {
       pa_operation* operation = pa_stream_drain(mPAStream, pulseAudioOutputPrivate_streamOperationSuccessCallback, this);
       if (nullptr == operation) {
 	WARNING_THIS("PulseAudioOutput::stopOutput") << "Failed to drain PulseAudio stream." << std::endl;
@@ -667,7 +707,6 @@ bool PulseAudioOutput::stoppedPlayback() {
 
   // Clear all processed buffers.
   d->mBuffers.clear();
-  d->mBufferWrapper.reset();
   d->mCurrentBuffer.reset();
 
   resetPort(input());
@@ -691,7 +730,7 @@ void PulseAudioOutput::process(ProcessIOFlags *ioFlags) {
 
   if(result == kSuccess) {
 
-    d->writeOutput(std::move(buffer));
+    d->writeOutput(buffer);
 
     // Hint that the PulseAudioOutput could process more buffers since the internal ring buffer is not full.
     if(!d->outputBufferFull()) {

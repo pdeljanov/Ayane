@@ -34,6 +34,9 @@ namespace Ayane {
     /** Enumeration of channels. **/
     enum Channel
     {
+        /** Invalid channel. */
+        kInvalid            = 0,
+
         /** Front left (FL) */
         kFrontLeft           = 1<<0,
         
