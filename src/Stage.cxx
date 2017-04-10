@@ -276,7 +276,6 @@ void StagePrivate::asyncProcessLoop() {
          */
         doBufferRun = ((mBufferQueuesReportedNotFull > 0) && (mBufferQueuesReportedNotFull == activeSources)) ||
         ((ioFlags & Stage::kProcessMoreHint) && (activeSources == 0));
-        
     }
     
     INFO_THIS("Stage::asyncProcessLoop") << "Asynchronous processing thread "

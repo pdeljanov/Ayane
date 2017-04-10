@@ -38,12 +38,21 @@ namespace Ayane {
     bool startOutput(const BufferFormat& format);
     void stopOutput();
 
+    bool corkOutput();
+    bool uncorkOutput();
+
     inline void writeOutput(ManagedBuffer& buffer){
-      mBuffers.push(buffer);
+      if(!mBuffers.push(buffer)){
+          WARNING_THIS("PulseAudioOutputPrivate::writeOutput") << "Overflowed prebuffer." << std::endl;
+      }
     }
 
     inline bool outputBufferFull(){
       return mBuffers.full();
+    }
+
+    inline bool isBuffering() {
+        return true;//return mBuffering;
     }
 
     bool setupPulseAudioContext();
@@ -67,7 +76,7 @@ namespace Ayane {
     void handlePulseAudioStreamSuspended();
     void handlePulseAudioStreamUnderflow();
     void handlePulseAudioStreamOverflow();
-    void handlePulseAudioStreamOperationSuccess();
+    void handlePulseAudioStreamOperationSuccess(int success);
 
     inline void waitForPulseAudioStateChange() {
       pa_threaded_mainloop_wait(mPAMainLoop);
@@ -136,7 +145,7 @@ namespace Ayane {
 
   static void pulseAudioOutputPrivate_streamOperationSuccessCallback(pa_stream* stream, int success, void* user){
     PulseAudioOutputPrivate* instance = static_cast<PulseAudioOutputPrivate*>(user);
-    instance->handlePulseAudioStreamOperationSuccess();
+    instance->handlePulseAudioStreamOperationSuccess(success);
   }
 
   bool PulseAudioOutputPrivate::waitForOperationToComplete(pa_operation* operation, pa_threaded_mainloop* mainloop)
@@ -148,8 +157,6 @@ namespace Ayane {
     }
 
     pa_operation_unref(operation);
-
-    INFO("DONE") << std::endl;
 
     return (PA_OPERATION_DONE == state);
   }
@@ -224,20 +231,21 @@ namespace Ayane {
         *mCurrentBuffer >> rawBuffer;
     }
 
-    // INFO_THIS("TIME") << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count() << std::endl;
+
+    if(rawBuffer.framesWritten() == 0) {
+        WARNING_THIS("PulseAudioOutputPrivate::handlePulseAudioStreamWriteRequest") << "Writing silence." << std::endl;
+        rawBuffer.fill(frames);
+        ::memset(streamBuffer, 0, streamBufferLength);
+    }
+
     // INFO_THIS("PulseAudioOutputPrivate::handlePulseAudioStreamWriteRequest") << "written=" << rawBuffer.framesWritten() << std::endl;
 
     if(frames != rawBuffer.framesWritten()) {
         WARNING_THIS("PulseAudioOutputPrivate::handlePulseAudioStreamWriteRequest") << "Short-changed." << std::endl;
     }
 
-    if(rawBuffer.framesWritten() == 0) {
-        pa_stream_cancel_write(mPAStream);
-    }
-    else {
-        // Write to the stream.
-        pa_stream_write(mPAStream, streamBuffer, rawBuffer.framesWritten() * frameSize, nullptr, 0, PA_SEEK_RELATIVE);
-    }
+    // Write to the stream.
+    pa_stream_write(mPAStream, streamBuffer, rawBuffer.framesWritten() * frameSize, nullptr, 0, PA_SEEK_RELATIVE);
 
     // Advance the presentation clock using the number of frames and sample rate to calculate the delta time.
     mClockProvider.publish(static_cast<double>(frames)/sampleSpec->rate);
@@ -259,7 +267,8 @@ namespace Ayane {
     WARNING_THIS("PulseAudioOutputPrivate::handlePulseAudioStreamOverflow") << "Overflow." << std::endl;
   }
   
-  void PulseAudioOutputPrivate::handlePulseAudioStreamOperationSuccess(){
+  void PulseAudioOutputPrivate::handlePulseAudioStreamOperationSuccess(int success){
+#pragma unused(success)
     signalPulseAudioStateChange();
   }
 
@@ -548,8 +557,10 @@ namespace Ayane {
     attrs.prebuf = (uint32_t) 0;
     attrs.fragsize = (uint32_t) -1;
 
+    pa_stream_flags_t streamFlags = (attrs.prebuf == 0 ? PA_STREAM_NOFLAGS : PA_STREAM_NOFLAGS);
+
     // Connect the stream to the sink (asynchronously).
-    if (pa_stream_connect_playback(mPAStream, nullptr, &attrs, PA_STREAM_NOFLAGS, nullptr, nullptr) < 0) {
+    if (pa_stream_connect_playback(mPAStream, nullptr, &attrs, streamFlags, nullptr, nullptr) < 0) {
       ERROR_THIS("PulseAudioOutputPrivate::createPulseAudioStream") << "Failed to connect PulseAudio stream to sink." << std::endl;
       destroyPulseAudioStream();
       return false;
@@ -646,7 +657,7 @@ namespace Ayane {
       pa_operation* operation = pa_stream_drain(mPAStream, pulseAudioOutputPrivate_streamOperationSuccessCallback, this);
       if (nullptr == operation) {
 	WARNING_THIS("PulseAudioOutput::stopOutput") << "Failed to drain PulseAudio stream." << std::endl;
-      } 
+      }
       else {
 	PulseAudioOutputPrivate::waitForOperationToComplete(operation, mPAMainLoop);
       }
@@ -658,7 +669,28 @@ namespace Ayane {
     pa_threaded_mainloop_unlock(mPAMainLoop);
   }
 
+  bool PulseAudioOutputPrivate::corkOutput() {
+      return false;
+  }
 
+  bool Ayane::PulseAudioOutputPrivate::uncorkOutput() {
+    pa_threaded_mainloop_lock(mPAMainLoop);
+
+    if(1 == pa_stream_is_corked(mPAStream)){
+        pa_operation* operation = pa_stream_cork(mPAStream, 0, pulseAudioOutputPrivate_streamOperationSuccessCallback, this);
+        if (nullptr == operation) {
+            WARNING_THIS("PulseAudioOutput::uncorkOutput") << "Failed to uncork PulseAudio stream." << std::endl;
+            return false;
+        }
+        else {
+            PulseAudioOutputPrivate::waitForOperationToComplete(operation, mPAMainLoop);
+            INFO_THIS("PulseAudioOutput::uncorkOutput") << "Uncorked." << std::endl;
+        }
+    }
+
+    pa_threaded_mainloop_unlock(mPAMainLoop);
+    return true;
+  }
 
 }
 
@@ -728,13 +760,13 @@ void PulseAudioOutput::process(ProcessIOFlags *ioFlags) {
   // Pull from the input sink.
   PullResult result = pull(input(), &buffer);
 
-  if(result == kSuccess) {
+  if(kSuccess == result) {
 
     d->writeOutput(buffer);
 
     // Hint that the PulseAudioOutput could process more buffers since the internal ring buffer is not full.
     if(!d->outputBufferFull()) {
-      (*ioFlags) |= kProcessMoreHint;
+        (*ioFlags) |= kProcessMoreHint;
     }
 
   }

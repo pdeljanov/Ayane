@@ -11,7 +11,10 @@
 using namespace Ayane;
 
 BufferQueue::BufferQueue( uint32_t count ) :
-mCount(++count), mWriteIndex(0), mReadIndex(0), mElements(mCount)
+    mCount(count),
+    mWriteIndex(0),
+    mReadIndex(0),
+    mElements(count)
 {
 }
 
@@ -19,16 +22,15 @@ BufferQueue::~BufferQueue() {
 }
 
 uint32_t BufferQueue::capacity() const {
-    return mCount - 1;
+    return mCount;
 }
 
 bool BufferQueue::full() const {
 
-    int writeIndex = mWriteIndex.load(std::memory_order_relaxed);
-    int readIndex = mReadIndex.load(std::memory_order_relaxed);
-    int newWriteIndex = (writeIndex + 1) % mCount;
+    unsigned int writeIndex = mWriteIndex.load();
+    unsigned int readIndex = mReadIndex.load();
 
-    return (newWriteIndex == readIndex);
+    return (writeIndex - readIndex + 1 >= mCount);
 }
 
 bool BufferQueue::empty() const {
@@ -46,44 +48,42 @@ void BufferQueue::clear() {
 }
 
 bool BufferQueue::push( ManagedBuffer &inBuffer) {
-    
-    int writeIndex = mWriteIndex.load(std::memory_order_relaxed);
-    int readIndex = mReadIndex.load(std::memory_order_relaxed);
-    
-    int newWriteIndex = (writeIndex + 1) % mCount;
-    
+
+    unsigned int writeIndex = mWriteIndex.load();
+    unsigned int readIndex = mReadIndex.load();
+
     // If the new write index is equal to the read index, the queue is
     // full.
-    if ( newWriteIndex == readIndex ) {
+    if (writeIndex - readIndex >= mCount) {
         return false;
     }
-    
+
     // Pass ownership of the buffer to the queue.
-    mElements[writeIndex] = std::move(inBuffer);
+    mElements[writeIndex % mCount] = std::move(inBuffer);
     
     // Store the new write index.
-    mWriteIndex.store(newWriteIndex, std::memory_order_relaxed);
-    
+    mWriteIndex.store(++writeIndex);
+
+
     return true;
 }
 
 bool BufferQueue::pop( ManagedBuffer *outBuffer) {
-    
-    int writeIndex = mWriteIndex.load(std::memory_order_relaxed);
-    int readIndex = mReadIndex.load(std::memory_order_relaxed);
+
+    unsigned int writeIndex = mWriteIndex.load();
+    unsigned int readIndex = mReadIndex.load();
     
     // If the read index is equal to the write index, the queue is
     // empty.
     if( readIndex == writeIndex ) {
         return false;
     }
-    
+
     // Pass ownership of the buffer from the queue to the caller.
-    *outBuffer = std::move(mElements[readIndex]);
+    *outBuffer = std::move(mElements[readIndex % mCount]);
     
     // Store the new read index.
-    int newReadIndex = (readIndex + 1) % mCount;
-    mReadIndex.store(newReadIndex, std::memory_order_relaxed);
+    mReadIndex.store(++readIndex);
     
     return true;
 }

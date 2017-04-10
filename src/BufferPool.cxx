@@ -7,10 +7,11 @@
  */
 
 #include "Ayane/BufferPool.h"
+#include "Ayane/Trace.h"
 
 using namespace Ayane;
 
-ManagedBufferDeallocator::ManagedBufferDeallocator(){
+ManagedBufferDeallocator::ManagedBufferDeallocator() : mOwner() {
     
 }
 
@@ -23,10 +24,12 @@ void ManagedBufferDeallocator::operator()(Buffer *buffer) {
     
     if(std::shared_ptr<ManagedBufferOwner> owner = mOwner.lock()) {
         // Reset the buffer, then try to get the owner to reclaim it.
+        // INFO_THIS("Reclaimed") << buffer << std::endl;
         buffer->reset();
         owner->reclaim(buffer);
     }
     else {
+        // INFO_THIS("Deleted") << buffer << std::endl;
         delete buffer;
     }
 }
@@ -73,12 +76,16 @@ ManagedBuffer BufferPoolPrivate::acquire() {
         Buffer *newBuffer = BufferFactory::make(mSampleFormat,
                                                 mBufferFormat,
                                                 mBufferLength);
-        
+
+        // INFO_THIS("Created") << newBuffer << std::endl;
+
         buffer = ManagedBuffer(newBuffer, ManagedBufferDeallocator(mWeakToSelf));
     }
     else
     {
         buffer = std::move(mPool.top());
+        // INFO_THIS("Reused") << buffer.get() << std::endl;
+
         mPool.pop();
     }
     

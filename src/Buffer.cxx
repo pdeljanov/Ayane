@@ -104,20 +104,17 @@ void TypedBuffer<T>::buildChannelMap( ChannelMap map, Channels channels, T* base
      */
     
     channels &= kChannelMask;
-    
-    // map[0] must *always* be a pointer to the start of the buffer.
-    map[0] = base;
-    
-    int i = 0;  // Channel we're testing.
-    int j = 0;  // Previous channel buffer index set to an address other than null.
-    
+
+    int i = 0;  // Channel being tested.
+    int j = 0;  // Channels indexed so far.
+
     while( channels )
     {
         if( channels & CanonicalChannels::get(i) )
         {
-            map[i] = (i > 0) ? (map[j] + stride) : base;
+            map[i] = base + j * stride;
             channels ^= CanonicalChannels::get(i);
-            j = i;
+            ++j;
         }
         else
         {
@@ -126,6 +123,9 @@ void TypedBuffer<T>::buildChannelMap( ChannelMap map, Channels channels, T* base
         
         ++i;
     }
+
+    // map[0] must *always* be a pointer to the start of the buffer.
+    map[0] = base;
 }
 
 /* Buffer traits to support template type -> enum mapping. */
