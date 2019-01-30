@@ -66,8 +66,10 @@ Live audio-graph manipulation is largely possible because of automatic stage lin
 ### Safety
 Ayane was designed to be type-safe, memory-safe, and thread-safe. 
 
-## Progress
-Ayane is a pre-alpha software! Despite the majority of the API being complete, it is still in flux, and is not recommended for production use.
+## Status
+Ayane is no longer being developed, but it is "feature complete." 
+
+Ayane is cross-platform across the major desktop platforms, however only macOS has a tested audio sink. The `pulseaudio` branch features an untested Linux audio sink.
 
 ## Examples
 
@@ -161,3 +163,7 @@ decoder2->deactivate();
 Stage::unlink(decoder2->output(), speakers->input());
 
 ```
+
+## License
+
+Ayane is available under the 3-Clause BSD License.
